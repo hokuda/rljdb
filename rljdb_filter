@@ -1,0 +1,222 @@
+#!/usr/bin/python3
+
+import rlwrapfilter
+import sys
+import re
+
+BREAKPOINT_FILE='./rljdb.breakpoint'
+SOURCEPATH_FILE='./rljdb.sourcepath'
+DEBUGLOG_FILE = 'rljdb.debug'
+DEBUGLOG = open(DEBUGLOG_FILE, mode='at') # append in text mode
+DEBUG = True
+
+
+FILTER = rlwrapfilter.RlwrapFilter()
+
+PROMPT = r'[>\]] ' # default prompt pattern
+
+COMPLETION_COMMANDS = [
+    # standard jdb commands
+    'connectors',
+    'run',
+    'threads',
+    'thread',
+    'suspend',
+    'resume',
+    'where',
+    'wherei',
+    'up',
+    'down',
+    'kill',
+    'interrupt',
+    'print',
+    'dump',
+    'eval',
+    'set',
+    'locals',
+    'classes',
+    'class',
+    'methods',
+    'fields',
+    'threadgroups',
+    'threadgroup',
+    'stop',
+    'clear',
+    'catch',
+    'ignore',
+    'watch',
+    'unwatch',
+    'trace',
+    'untrace',
+    'step',
+    'stepi',
+    'next',
+    'cont',
+    'list',
+    'use',
+    'exclude',
+    'classpath',
+    'monitor',
+    'unmonitor',
+    'read',
+    'lock',
+    'threadlocks',
+    'pop',
+    'reenter',
+    'redefine',
+    'disablegc',
+    'enablegc',
+    '!!',
+    'help',
+    'version',
+    'exit',
+    'quit',
+    # acronyms and custom commands
+    's', # step
+    'c', # cont
+    'p', # print
+    'n', # next
+    'w', # where
+    'd', # dump
+    'l', # list
+    'b', # break (stop in/at)
+    ]
+
+
+def set_breakpoint():
+    pass
+
+
+
+def set_sourcepath():
+    debug('set_sourcepath invoked\n')
+    sourcepath = '' # list of paths delimited by ':'
+    try:
+        with open(SOURCEPATH_FILE, "rt") as file:
+            FILTER.send_output_oob("Found " + SOURCEPATH_FILE + '\n')
+            for path in file:
+                path = path.rstrip() # remove \n at the end of the line
+                if re.match(r'^\s*#.*', path):
+                    continue
+                sourcepath += path + ':'
+    except:
+        debug('open failed\n')
+        raise
+        pass
+
+    output = FILTER.cloak_and_dagger("use " + sourcepath, "> ", 1);
+
+        
+def debug(msg):
+    if DEBUG:
+        DEBUGLOG.write(msg)
+        DEBUGLOG.write('\n')
+        DEBUGLOG.flush()
+
+
+def info(msg):
+    FILTER.send_output_oob(msg)
+    FILTER.send_output_oob('\n')
+
+
+def initialize():
+    def do_nothing():
+        pass
+    global initialize
+    set_breakpoint()
+    set_sourcepath()
+    initialize = do_nothing # run once
+
+
+def prompt_handler(prompt):
+    """
+    prompt handler
+    """
+    initialize()
+    return prompt
+
+
+def completion_handler(line, prefix, completions):
+    """
+    completion handler
+    """
+    tokens = get_tokens(line)
+    debug('competion_hander: tokens=[' + ', '.join(tokens) + ']')
+    debug('competion_hander: len(tokens)=' + str(len(tokens)))
+    if len(tokens) == 1:
+        completions = complete_command(tokens[0])
+        debug('completion_handler: c=' + ', '.join(completions))
+        return completions
+    if len(tokens) > 2:
+        completions = complete_command_argument(tokens)
+        debug('completion_handler: c=' + ', '.join(completions))
+        return completions
+
+
+def complete_command_argument(tokens):
+
+    ## complete expression for:
+    # print <expr>              -- print value of expression
+    # dump <expr>               -- print all object information
+    # eval <expr>               -- evaluate expression (same as print)
+    # set <lvalue> = <expr>     -- assign new value to field/variable/array element
+    # 'p', # print
+    # 'd', # dump
+    if tokens[0] in ['print', 'dump', 'eval', 'set', 'p', 'd']:
+        return complete_expression(tokens)
+    
+    ## complete class for:
+    # class <class id>          -- show details of named class
+    # methods <class id>        -- list a class's methods
+    # fields <class id>         -- list a class's fields
+    if tokens[0] in ['class', 'methods', 'fields']:
+        return complete_class(tokens)
+
+    ## complete set breakpoint for:
+    # stop in <class id>.<method>[(argument_type,...)]
+    #                           -- set a breakpoint in a method
+    # stop at <class id>:<line> -- set a breakpoint at a line
+    # 'b', # break (stop in/at)
+    if tokens[0] in ['stop', 'b']:
+        return complete_set_breakpoint(tokens)
+
+    ## complete clear breakpoint for:
+    # clear <class id>.<method>[(argument_type,...)]
+    #                           -- clear a breakpoint in a method
+    # clear <class id>:<line>   -- clear a breakpoint at a line
+    # clear                     -- list breakpoints
+    if tokens[0] in ['clear']:
+        return complete_clear_breakpoint(tokens)
+
+    ## otherwise
+    return []
+
+
+def complete_command(prefix):
+    debug('complete_command: prefix=' + prefix)
+    pattern = r'^' + prefix
+    completions = list(filter((lambda s: re.search(pattern, s)), COMPLETION_COMMANDS))
+    debug('complete_command: completions=' + ', '.join(completions[:]))
+    debug('complete_command: completions=' + ', '.join(completions))
+    return completions
+
+
+def get_tokens(line):
+    """
+    returns the tokens + '' if line ends with " "(white space)
+    retruns the tokens otherwise
+    """
+    tokens = re.split(r'\s', line.lstrip(' '))
+    debug('get_tokes: ["' + '", "'.join(tokens) + '"]')
+    return tokens
+
+    
+if __name__ == '__main__':
+
+    debug('rljdb gets started\n')
+
+    FILTER.cloak_and_dagger_verbose = False
+    FILTER.prompt_handler = prompt_handler
+    FILTER.completion_handler = completion_handler
+
+    FILTER.run()

@@ -1,9 +1,34 @@
 #!/usr/bin/python3
 
+"""
+DONE:
+* set sourcepath
+* debug log
+* command name completion
+
+
+TODO:
+
+1. local variable name completion
+1. class name completion
+1. method completion
+1. field completion
+2. acronyms
+3. set breakpoint at startup
+4. enahnced clear command
+5. enter-key to do last command
+6. v/o command to view/open source file
+7. release breakpoints during completion
+8. conditional breakpoint
+9. hit count
+"""
+
 import rlwrapfilter
 import sys
 import re
 
+
+        
 BREAKPOINT_FILE='./rljdb.breakpoint'
 SOURCEPATH_FILE='./rljdb.sourcepath'
 DEBUGLOG_FILE = 'rljdb.debug'
@@ -40,7 +65,8 @@ COMPLETION_COMMANDS = [
     'fields',
     'threadgroups',
     'threadgroup',
-    'stop',
+    'stop in',
+    'stop at',
     'clear',
     'catch',
     'ignore',
@@ -82,6 +108,45 @@ COMPLETION_COMMANDS = [
     'b', # break (stop in/at)
     ]
 
+class CompositeCompletionRequest:
+    """
+    request for completion
+    """
+    
+    def __init__(self, line, prefix, completions):
+        self.line = line
+        self.prefix = prefix
+        self.comletions = completions
+        self.tokens = get_tokens(line)
+        
+
+class FunctionBase:
+    """
+    base class for each function
+    """
+
+    def __init__(self):
+        pass
+
+    def set_next(self, next):
+        self.next = next
+        return next
+
+    def do_completion(self, request):
+        return None
+        
+    def complete_handler(self, request):
+        if self.do_complettion(request) == None:
+            request = self.next.complete_handler(request)
+        return request
+
+
+class LocalsCompletionFunction(FunctionBase):
+    def do_completion(self, request):
+        return None
+        
+        
+    
 
 def set_breakpoint():
     pass

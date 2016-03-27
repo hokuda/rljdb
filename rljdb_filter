@@ -1,20 +1,19 @@
-#!/usr/bin/python3
+#!/usr/bin/python3 -u
 
 """
 DONE:
 * set sourcepath
 * debug log
 * command name completion
+* local variable name completion
+* method completion
+* field completion
+* set breakpoint at startup
+* class name completion
+* acronyms
 
 
 TODO:
-
-1. local variable name completion
-1. class name completion
-1. method completion
-1. field completion
-2. acronyms
-3. set breakpoint at startup
 4. enahnced clear command
 5. enter-key to do last command
 6. v/o command to view/open source file
@@ -27,7 +26,10 @@ import sys
 import re
 import datetime
 import time
-sys.path.append('/home/hokuda/src/github.com/hokuda/rlwrapfilter.py')
+
+# for development
+#sys.path.append('/home/hokuda/src/github.com/hokuda/rlwrapfilter.py')
+sys.path.append('./')
 import rlwrapfilter
         
 BREAKPOINT_FILE='./rljdb.breakpoint'
@@ -35,7 +37,8 @@ SOURCEPATH_FILE='./rljdb.sourcepath'
 DEBUGLOG_FILE = './rljdb.debug'
 DEBUGLOG = open(DEBUGLOG_FILE, mode='at') # append in text mode
 DEBUG = True
-PROMPT = r'[>\]] ' # default prompt pattern
+#PROMPT = r"[>\]] " # default prompt pattern
+PROMPT = r"(> )|(\[[0-9]+\] )" # default prompt pattern
 COMMANDS = [
     # standard jdb commands
     'connectors',
@@ -103,6 +106,17 @@ COMMANDS = [
     'b', # break(stop)
     ]
 
+ACRONYMS = {
+    's':'step',
+    'c':'cont',
+    'p':'print',
+    'n':'next',
+    'w':'where',
+    'd':'dump',
+    'l':'list',
+    'b':'break(stop)'
+    }
+
 rlwrap_filter = rlwrapfilter.RlwrapFilter()
 
 class Singleton:
@@ -124,6 +138,8 @@ class CompletionRequest:
     """
     
     def __init__(self, line, prefix, completions):
+        debug('CompletionRequest.__init__: line=' + line)
+        debug('CompletionRequest.__init__: prefix=' + prefix)
         debug('CompletionRequest.__init__: completions=[' + ', '.join(completions) + ']')
         self.line = line
         self.prefix = prefix
@@ -145,21 +161,28 @@ class ExecutorBase:
         self.next = next
         return next
 
-    def do_completion(self, request):
-        return None
+    def handle_completion(self, request):
+        raise NotImplementedError()
         
     def completion_handler(self, request):
-        req = self.do_completion(request)
-        debug('request=' + str(request.completions))
-        debug('req.cmp=' + str(req.completions))
-        if len(req.completions) == 1 and self.next != None: # req.completions==['']
-            req = self.next.completion_handler(request)
-        debug('req.cmp=' + str(req.completions))
-        return req
+        request = self.handle_completion(request)
+        if len(request.completions) == 1 and self.next != None: # req.completions==['']
+            request = self.next.completion_handler(request)
+        return request
 
+    def handle_input(self, input_tokens):
+        raise NotImplementedError()
+        
+    def input_handler(self, input_tokens):
+        input_tokens = self.handle_input(input_tokens)
+        if self.next != None:
+            input_tokens = self.next.input_handler(input_tokens)
+        return input_tokens
+
+    
 
 class CommandNameCompletionExecutor(ExecutorBase):
-    def do_completion(self, request):
+    def handle_completion(self, request):
         if len(request.tokens) != 1:
             return request
         pattern = r'^' + request.prefix
@@ -169,12 +192,14 @@ class CommandNameCompletionExecutor(ExecutorBase):
 
     
 class LocalsCompletionExecutor(ExecutorBase):
-    def do_completion(self, request):
-        debug("Locals.do_completion: " + request.tokens[0])
+    def handle_completion(self, request):
+        if request.tokens[-1] != request.prefix:
+            return request
+        debug("Locals.handle_completion: " + request.tokens[0])
         if not request.tokens[0] in ['print', 'dump', 'p']:
             return request
-        result = rlwrap_filter.cloak_and_dagger("locals", PROMPT, 1)
-        locals = self.grep_by_prefix(request.prefix, self.parse_locals(result))
+        output = rlwrap_filter.cloak_and_dagger("locals", PROMPT, 1)
+        locals = self.grep_by_prefix(request.prefix, self.parse_locals(output))
         if len(locals) == 1:
             locals.append(locals[0] + ".") # add "var." to completion list
         request.completions.extend(locals)
@@ -204,13 +229,183 @@ class ClassMemberCompletionExecutor(ExecutorBase):
     """
     complete names of fields and methods
     """
-    def do_completion(self, request):
-        pass
+    def handle_completion(self, request):
+        if not request.tokens[0] in ['print', 'dump', 'p', 'eval', 'set', 'stop', 'b', 'class', 'clear', 'watch', 'unwatch']:
+            return request
+        debug("ClassMemberCompletionExecutor.handle_completion: request.completions=[" + ",".join(request.completions))
+        last_token = request.tokens[-1]
+        [base_name, tail, paren] = self.parse_last_token(last_token)
+        debug("ClassMemberCompetionExecutor.do_complition: base_name={0} tail={1} paren={2}".format(base_name, tail, paren))
+        class_name = base_name if self.is_class_name(base_name) else self.get_class_name(base_name)
+        if class_name == None:
+            return request
+        debug("ClassMemberCompetionExecutor.do_complition: class_name=" + class_name)
+        if class_name != None:
+            if paren == "":
+                fields = self.complete_fields(class_name, tail)
+                debug("ClassMemberCompletionExecutor.handle_completion: fields=[" + ",".join(fields))
+                request.completions.extend(fields)
+            methods = self.complete_methods(class_name, tail, paren)
+            request.completions.extend(methods)
+            # add "var." to completion list
+            debug("ClassMemberCompletionExecutor.handle_completion: len(request.completions)=" + str(len(request.completions)))
+            if len(request.completions)==1:
+                request.completions.append(request.completions[0] + ".")
+        return request
+
+    def parse_last_token(self, last_token):
+        """
+        decompose token to fqdn, method, and parenses
+        (example)
+        when $last_token = "org.apache.catalina.connector.CoyoteAdapter.service(org.apache.",
+        prior     = "org.apache.catalina.connector.CoyoteAdapter" and 
+        posterior = "service"
+        paren     = "(org.apache."
+        """
+        m = re.match(r"(.+)\.([^\.\(]+)(\([^\)]*)$", last_token)
+        if m != None:
+            debug("ClassMemberCompletionExecutor.parse_last_token: " +
+                  "| {0} | {1} | {2} |".format(m.group(1), m.group(2), m.group(3)))
+            return [m.group(1), m.group(2), m.group(3)]
+
+        m = re.match(r"(.+)\.([^\.\(]+)$", last_token)
+        if m != None:
+            debug("ClassMemberCompletionExecutor.parse_last_token: " +
+                  "| {0} | {1} |".format(m.group(1), m.group(2)))
+            return [m.group(1), m.group(2), ""]
+
+        m = re.match(r"(.+)\.$", last_token)
+        if m != None:
+            debug("ClassMemberCompletionExecutor.parse_last_token: " +
+                  "| {0} |".format(m.group(1)))
+            return [m.group(1), "", ""]
+
+        return ["", "", ""] # finally
+        
+    def is_class_name(self, name):
+        """
+        returns true if `class $name` returns a valid class name.
+        """
+        command = "class {0}".format(name)
+        output = rlwrap_filter.cloak_and_dagger(command, PROMPT, 10)
+        debug("is_class_name: output={0}".format(output))
+        m = re.match(r"Class: .*", output)
+        return m != None
+        
+    def get_class_name(self, name):
+        """
+        returns $name.getClass()
+        if $name.getClass() has an invalid value, returns None
+        """
+        output = rlwrap_filter.cloak_and_dagger("print {0}.getClass()".format(name), PROMPT, 1)
+        debug("get_class_name : output = {0}".format(output))
+        # example:
+        # http-/127.0.0.1:8080-1[1] print res.commited.getClass()
+        # com.sun.tools.example.debug.expr.ParseException: Cannot access field of primitive type: false
+        #  res.commited.getClass() = null
+        # http-/127.0.0.1:8080-1[1] print res.getClass()
+        #  res.getClass() = "class org.apache.coyote.Response"
+        m = re.match(r".+ = \"class (.+)\"", output)
+        class_name = m.group(1) if m != None else None
+        debug("get_class_name : class_name = {0}".format(class_name))
+        return class_name
+
+    def complete_fields(self, class_name, tail):
+        debug("ClassMemberCompletionExecutor.complete_fields: tail=" + tail)
+        output = rlwrap_filter.cloak_and_dagger("fields {0}".format(class_name), PROMPT, 1)
+        debug("ClassMemberCompletionExecutor.complete_fields: output=" + output)
+        fields = self.parse_fields(output)
+        debug("ClassMemberCompletionExecutor.complete_fields: fields=[" + ",".join(fields))
+        return list(filter((lambda x: re.search(r"^" + tail , x)), fields))
+    
+
+    def parse_fields(self, output):
+        lines = output.split("\r\n")
+        lines = lines[1:] # remove first
+        debug("ClassMemberCompletionExecutor.parse_fields: lines = " + ",".join(lines))
+        fields = list(
+            map(
+                (lambda m: m.group(2)),
+                filter(
+                    (lambda m: m != None),
+                    map((lambda l: re.match(r"([^\s]+)\s([^\s]+)", l)), lines)
+                )
+            )
+        )
+        return fields
+
+    def complete_methods(self, class_name, tail, paren):
+        debug("ClassMemberCompletionExecutor.complete_methods: tail=" + tail)
+        output = rlwrap_filter.cloak_and_dagger("methods {0}".format(class_name), PROMPT, 1)
+        debug("ClassMemberCompletionExecutor.complete_methods: output=" + output)
+        methods = self.parse_methods(output)
+        debug("ClassMemberCompletionExecutor.complete_methods: methods=[" + ",".join(methods))
+        return list(filter((lambda x: re.search(r"^" + tail , x)), methods))
+    
+
+    def parse_methods(self, output):
+        lines = output.split("\r\n")
+        lines = lines[1:] # remove first
+        debug("ClassMemberCompletionExecutor.parse_methods: lines = " + ",".join(lines))
+        methods = list(
+            map(
+                (lambda m: m.group(2)),
+                filter(
+                    (lambda m: m != None),
+                    map((lambda l: re.match(r"([^\s]+)\s([^\s]+)", l)), lines)
+                )
+            )
+        )
+        return methods
 
 
+class ClassNameCompletionExecutor(ExecutorBase):
+    """
+    complete FQCN
+    """
+    def handle_completion(self, request):
+        if not request.tokens[0] in ['print', 'dump', 'p', 'stop', 'b', 'class', 'clear', 'watch', 'unwatch']:
+            return request
+        prefix = request.tokens[-1]
+        output = rlwrap_filter.cloak_and_dagger("classes", PROMPT, 1)
+    
+        classes = re.split(r"\s+", output)
+        classes = list(filter((lambda v: re.search(r"^" + prefix, v)), classes))
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": matched classes = " + ",".join(classes))
+
+        pkg = prefix[:prefix.rindex(".")]
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": pkg = " + pkg)
+
+        components = map((lambda x: re.match(r"^" + pkg + r"\.([^\.]+).*", x).group(1)), classes)
+    
+        components   = list(set(components)) # do uniq
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": uniq components = " + ",".join(components))
+
+        if len(components) == 1: # add "var." to completion list
+            components.append(components[0] + ".")
+
+        request.completions.extend(components)
+        return request
 
 
-
+class ExpandAcronymExecutor(ExecutorBase):
+    """
+    replace an acronym to a long form
+    """
+    def handle_input(self, input_tokens):
+        for (index, token) in enumerate(input_tokens):
+            if len(token) == 0:
+                continue
+            if len(token) > 1:
+                return input_tokens
+            try:
+                long_form = ACRONYMS[token]
+            except KeyError:
+                return input_tokens
+            input_tokens[index] = long_form
+            return input_tokens
+        return input_tokens
+    
 
 class BreakPoint:
     """
@@ -239,35 +434,53 @@ class BreakPointManager:
     def activate(self):
         for bp in self.break_point_list:
             if re.match(r".*:.*", bp.where_to_stop):
-                result = rlwrap_filter.cloak_and_dagger("stop at " + bp.where_to_stop, PROMPT, 5)
+                output = rlwrap_filter.cloak_and_dagger("stop at " + bp.where_to_stop, PROMPT, 5)
             else:
-                result = rlwrap_filter.cloak_and_dagger("stop in " + bp.where_to_stop, PROMPT, 5)
+                output = rlwrap_filter.cloak_and_dagger("stop in " + bp.where_to_stop, PROMPT, 5)
         # clean up stale output which arrives late
         time.sleep(0.1)
-        rlwrap_filter.discharge_scum(PROMPT, 1.0)
+        rlwrap_filter.vacuum_stale_message(PROMPT, 1.0)
+        #output = rlwrap_filter.cloak_and_dagger("", PROMPT, 5)
+        #output = rlwrap_filter.cloak_and_dagger("clear", PROMPT, 5)
+        #debug("BreakPointerManager.activate: clear output=" + output)
+        #time.sleep(0.1)
+        #rlwrap_filter.vacuum_stale_message(PROMPT, 1.0)
 
     def deactivate(self):
         result = rlwrap_filter.cloak_and_dagger("clear", PROMPT, 5)
-        bp_list = self.parse_clear(result)
-        map(
-            (lambda b: rlwrap_filter.cloak_and_dagger("clear " + b, PROMPT, 5)),
-             bp_list
-        )
+        break_points = self.parse_clear(result)
+        debug("BreakPointerManager.deactivate: bp_listt=[" + ",".join(break_points) + "]")
+        for b in break_points:
+            output = rlwrap_filter.cloak_and_dagger("clear " + b, PROMPT, 5)
+            debug("BreakPointerManager.deactivate: clear for each bp output=" + output)
+        time.sleep(0.1)
+        rlwrap_filter.vacuum_stale_message(PROMPT, 1.0)
+        #output = rlwrap_filter.cloak_and_dagger("clear", PROMPT, 5)
+        #debug("BreakPointerManager.deactivate: clear output=" + output)
+        #time.sleep(0.1)
+        #rlwrap_filter.vacuum_stale_message(PROMPT, 1.0)
 
     def parse_clear(self, result):
-        lines = result.split('\n')
+        lines = result.split('\r\n')
         lines.reverse()
         lines.pop() # remove first line
         vars = list(
-            map(self.extract_breakpoint, lines)
+            filter(
+                (lambda x: x!=None),
+                map(self.extract_breakpoint, lines)
+                )
             )
+        debug("BreakPointerManager.parse_clear: vars=" + ",".join(vars))
         return vars
 
     def extract_breakpoint(self, line):
+        debug("BreakPointerManager.extract_breakpoint: line=" + line)
         m = re.search(r".*breakpoint (.*)", line)
         if m == None:
+            debug("BreakPointerManager.extract_breakpoint: m.group(1)=None")
             return None
         else:
+            debug("BreakPointerManager.extract_breakpoint: m.group(1)=" + m.group(1))
             return m.group(1)
 
 
@@ -341,6 +554,7 @@ def prompt_handler(prompt):
         return ""
     else:
         initialize()
+        debug("prompt_handler: prompt=|" + prompt + "|")
         return prompt
 
 
@@ -349,11 +563,29 @@ def completion_handler(line, prefix, completions):
     completion handler
     """
     executor = CommandNameCompletionExecutor()
-    executor.set_next(LocalsCompletionExecutor())
+    executor.set_next(
+        LocalsCompletionExecutor()
+    ).set_next(
+        ClassMemberCompletionExecutor()
+    ).set_next(
+        ClassNameCompletionExecutor()
+    )
     BreakPointManager().deactivate()
     request = executor.completion_handler(CompletionRequest(line, prefix, completions))
     BreakPointManager().activate()
     return request.completions
+
+
+def input_handler(input):
+    """
+    input handler
+    """
+    executor = ExpandAcronymExecutor()
+    #executor.set_next(LocalsCompletionExecutor())
+    input_tokens = input.split(' ')
+    input_tokens = executor.input_handler(input_tokens)
+    input = ' '.join(input_tokens)
+    return input
 
 
 def complete_command_argument(tokens):
@@ -426,8 +658,10 @@ if __name__ == '__main__':
     debug('rljdb gets started\n')
 
     rlwrap_filter.cloak_and_dagger_verbose = False
+    #rlwrap_filter.cloak_and_dagger_verbose = True
     rlwrap_filter.prompt_handler = prompt_handler
     rlwrap_filter.completion_handler = completion_handler
+    rlwrap_filter.input_handler = input_handler
     rlwrap_filter.message_handler=logit
 
     rlwrap_filter.run()

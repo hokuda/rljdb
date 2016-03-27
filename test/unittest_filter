@@ -1,0 +1,162 @@
+#!/usr/bin/python3
+
+import unittest
+import sys
+import re
+import datetime
+import time
+sys.path.append('../../rlwrapfilter.py')
+import rlwrapfilter
+sys.path.append('../')
+import rljdb_filter
+        
+rlwrap_filter = rlwrapfilter.RlwrapFilter()
+PROMPT = r"[>\]] "
+
+class Test100CompletionRequest(unittest.TestCase):
+
+    def test_tokens(self):
+        request = rljdb_filter.CompletionRequest("aaa bbb ccc", "", [])
+        actual = request.tokens
+        expected = ["aaa", "bbb", "ccc"]
+        self.assertEqual(expected, actual)
+
+class Test200Run(unittest.TestCase):
+    """
+    This is not an actual test but only to invoke "run" command.
+    """
+    def test_run(self):
+        rljdb_filter.rlwrap_filter.cloak_and_dagger_verbose = True
+        rljdb_filter.rlwrap_filter.vacuum_stale_message(PROMPT, 10)
+        request = rljdb_filter.rlwrap_filter.cloak_and_dagger("stop at Test:14", PROMPT, 5)
+        request = rljdb_filter.rlwrap_filter.cloak_and_dagger("run", PROMPT, 5)
+        time.sleep(2)
+        rljdb_filter.rlwrap_filter.vacuum_stale_message(PROMPT, 10)
+        #request = rljdb_filter.rlwrap_filter.cloak_and_dagger("next", PROMPT, 5)
+        #request = rljdb_filter.rlwrap_filter.cloak_and_dagger("where", PROMPT, 5)
+        self.assertTrue(True)
+
+
+class Test300LocalsCompletionExecutor(unittest.TestCase):
+
+    def test_handle_completion(self):
+        executor = rljdb_filter.LocalsCompletionExecutor()
+
+        request = rljdb_filter.CompletionRequest("print ", "", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ["arg", "result"]
+        self.assertEqual(expected, actual)
+
+        request = rljdb_filter.CompletionRequest("print a", "a", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ["arg", "arg."]
+        self.assertEqual(expected, actual)
+
+        request = rljdb_filter.CompletionRequest("print result", "result", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ["result", "result."]
+        self.assertEqual(expected, actual)
+
+
+
+class Test300ClassMemberCompletionExecutor(unittest.TestCase):
+
+    def test_parse_last_token(self):
+        executor = rljdb_filter.ClassMemberCompletionExecutor()
+        
+        last_token = "org.apache.catalina.connector.CoyoteAdapter.service(org.apache."
+        actual = executor.parse_last_token(last_token)
+        expected = ["org.apache.catalina.connector.CoyoteAdapter", "service", "(org.apache."]
+        self.assertEqual(expected, actual)
+
+        last_token = "org.apache.catalina.connector.CoyoteAdapter.servic"
+        actual = executor.parse_last_token(last_token)
+        expected = ["org.apache.catalina.connector.CoyoteAdapter", "servic", ""]
+        self.assertEqual(expected, actual)
+
+        last_token = "org."
+        actual = executor.parse_last_token(last_token)
+        expected = ["org", "", ""]
+        self.assertEqual(expected, actual)
+
+    def test_is_class_name(self):
+        executor = rljdb_filter.ClassMemberCompletionExecutor()
+
+        name = "hoge.fuga"
+        actual = executor.is_class_name(name)
+        expected = False
+        self.assertEqual(expected, actual)
+
+        name = "Test"
+        actual = executor.is_class_name(name)
+        expected = True
+        self.assertEqual(expected, actual)
+
+    def test_get_class_name(self):
+        executor = rljdb_filter.ClassMemberCompletionExecutor()
+
+        name = "this"
+        actual = executor.get_class_name(name)
+        expected = "Test"
+        self.assertEqual(expected, actual)
+
+        name = "result"
+        actual = executor.get_class_name(name)
+        expected = "java.lang.String"
+        self.assertEqual(expected, actual)
+
+        name = "no_such_var"
+        actual = executor.get_class_name(name)
+        self.assertIsNone(actual)
+
+    def test_handle_completion(self):
+        executor = rljdb_filter.ClassMemberCompletionExecutor()
+
+        request = rljdb_filter.CompletionRequest("print this.t", "t", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ['test(java.lang.String)', 'toString()']
+        self.assertEqual(expected, actual)
+
+        request = rljdb_filter.CompletionRequest("print this.p", "p", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ["prefix", "prefix."]
+        self.assertEqual(expected, actual)
+
+
+class Test300ClassNameCompletionExecutor(unittest.TestCase):
+
+    def test_handle_completion(self):
+        executor = rljdb_filter.ClassNameCompletionExecutor()
+
+        request = rljdb_filter.CompletionRequest("stop in java.lang.StringBuf", "StringBuf", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ['StringBuffer', 'StringBuffer.']
+        self.assertEqual(expected, actual)
+
+
+class Test300ExpandAcronymExecutor(unittest.TestCase):
+
+    def test_handle_input(self):
+        executor = rljdb_filter.ExpandAcronymExecutor()
+        actual = executor.handle_input(['', '', 's', 'hoge'])
+        expected = ['', '', 'step', 'hoge']
+        self.assertEqual(expected, actual)
+
+
+class Test999Exit(unittest.TestCase):
+
+    def test_exit(self):
+        rlwrap_filter.cloak_and_dagger("exit", "> ", 0)
+        self.assertTrue(True)
+
+
+# 直接実行されたときのみ unittest.main() を呼び出して
+# テストケースを回す
+if __name__ == "__main__":
+    unittest.main()

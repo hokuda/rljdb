@@ -82,6 +82,7 @@ class Test300ClassMemberCompletionExecutor(unittest.TestCase):
         expected = ["org", "", ""]
         self.assertEqual(expected, actual)
 
+        
     def test_is_class_name(self):
         executor = rljdb_filter.ClassMemberCompletionExecutor()
 
@@ -137,6 +138,12 @@ class Test300ClassNameCompletionExecutor(unittest.TestCase):
         request = executor.handle_completion(request)
         actual = request.completions
         expected = ['StringBuffer', 'StringBuffer.']
+        self.assertEqual(expected, actual)
+
+        request = rljdb_filter.CompletionRequest("print T", "T", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ['Test', 'Test.']
         self.assertEqual(expected, actual)
 
 

@@ -31,7 +31,8 @@ if __name__ == '__main__':
                    '-pRED',
                    '-C', 'jdb',
                    '-b', "' .'",
-                   '-z', rljdb_filter]
+                   '-z',
+                   rljdb_filter]
     jdb = find_executable('jdb')
     jdb_opts = sys.argv[1:]
 

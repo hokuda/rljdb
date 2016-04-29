@@ -1,5 +1,5 @@
-#!/usr/bin/pudb3
 #!/usr/bin/python3 -u
+#!/usr/bin/pudb3
 
 """
 DONE:
@@ -18,15 +18,18 @@ DONE:
 
 
 TODO:
-6. v/o command to view/open source file
+6. v command to view source file
 8. conditional breakpoint
 9. hit count
 """
 
 import sys
+import os
 import re
 import datetime
 import time
+import subprocess
+import tempfile
 
 # for development
 #sys.path.append('/home/hokuda/src/github.com/hokuda/rlwrapfilter.py')
@@ -96,6 +99,7 @@ COMMANDS = [
     'version',
     'exit',
     'quit',
+    'v', # view source code
     # acronyms and custom commands
     's', # step
     'c', # cont
@@ -463,7 +467,7 @@ class EnhancedClearCommandExecutor(ExecutorBase):
                     return input_tokens
                 b = manager.get_breakpoint(index)
                 manager.remove(index)
-                return ['clear', b.where_to_stop]
+                return ['clear', b.location]
             except ValueError:
                 pass
         return input_tokens
@@ -475,6 +479,7 @@ class EnhancedClearCommandExecutor(ExecutorBase):
         """
         debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
         if re.search(r"Breakpoints set:", output) or self.index_out_of_bound ==True:
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": ho------------- = " + output)
             return ""
         return output
     
@@ -501,7 +506,7 @@ class EnhancedClearCommandExecutor(ExecutorBase):
         manager = BreakPointManager()
         break_points = manager.get_breakpoints()
         for i,b in enumerate(break_points):
-            s = "    {:>2d} {:s}".format(i, b.where_to_stop)
+            s = "    {:>2d} {:s}".format(i, b.location)
             rlwrap_filter.send_output_oob(s + '\n')
 
     
@@ -528,16 +533,89 @@ class RepeatLastCommandExecutor(ExecutorBase):
 
 
 @Singleton
-class ViewFileExecutor(ExecutorBase):
-    pass
+class ViewFileCommandExecutor(ExecutorBase):
+    """
+    emacsclient -n -e '(find-file-read-only "~/.emacs")' -e '(goto-line 40)'
+    """
+    def __init__(self):
+        pass
+
+    def handle_output(self, output):
+        """
+        keep a break point in mind
+        """
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+              + ": output = " + output
+        )
+        m = re.search(r"Breakpoint hit: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
+        if m:
+            self.classname = m.group(1)
+            self.linenum = m.group(2)
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+                  + ": classname = " + self.classname
+                  + ": linenum = " + self.linenum
+            )
+        return output
+
+    def handle_input(self, input_tokens):
+        """
+        invoke emacsclient to view self.classname at self.linenum
+        """
+        if len(input_tokens) == 1 and input_tokens[0] == 'v':
+            basename = self.get_basename(self.class_method)
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": basename = " + basename)
+            manager = SourcePathManager()
+            first = self.find(manager.source_path, basename + '.java').__next__()
+            command = "emacsclient -n -e '(find-file-read-only \"" + first + "\")' -e '(goto-line " + str(self.linenum) + ")'"
+            os.system(command)
+            return input_tokens
+        # else
+        return input_tokens
+
+    def get_basename(self, class_method):
+        return class_method.split('.')[-2]
+
+    def handle_prompt(self, prompt):
+        """
+        Fetches cumulative_output if output =~ /^Breakpoint hit:.*/, 
+        parses it, and register classname and line number
+        """
+        output = rlwrap_filter.cumulative_output
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+        m = re.search(r"Breakpoint hit: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
+        if m:
+            self.class_method = m.group(1)
+            self.linenum = m.group(2)
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+                  + ": class_method = " + self.class_method
+                  + ": linenum = " + self.linenum
+            )
+        return prompt
+
+    def find(self, sourcepath, filename):
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+              + ": sourcepath = " + ','.join(sourcepath)
+              + ": filename = " + filename
+        )
+        pattern = re.compile(re.escape(filename) + '$')
+        for directory in sourcepath:
+            for root, dirs, files in os.walk(directory):
+                for file in files:
+                    debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+                          + ": root = " + root
+                          + ": file = |" + file + "|"
+                    )
+                    if pattern.search(file) == None:
+                        continue
+                    yield os.path.join(root, file)
 
 
 class BreakPoint:
     """
     break point
     """
-    def __init__(self, where_to_stop, condition=None, hit_count=None):
-        self.where_to_stop = where_to_stop
+    def __init__(self, location, condition=None, hit_count=None):
+        self.location = location
         self.condition = condition
         self.hit_count = hit_count
 
@@ -564,16 +642,16 @@ class BreakPointManager:
 
     def activate(self):
         for b in self.break_points:
-            if re.match(r".*:.*", b.where_to_stop):
-                output = rlwrap_filter.cloak_and_dagger("stop at " + b.where_to_stop, PROMPT, 0.1)
+            if re.match(r".*:.*", b.location):
+                output = rlwrap_filter.cloak_and_dagger("stop at " + b.location, PROMPT, 0.1)
             else:
-                output = rlwrap_filter.cloak_and_dagger("stop in " + b.where_to_stop, PROMPT, 0.1)
+                output = rlwrap_filter.cloak_and_dagger("stop in " + b.location, PROMPT, 0.1)
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
-            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": where_to_stop = " + b.where_to_stop)
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": location = " + b.location)
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output.replace('\r\n','\\r\\n'))
-            if b.where_to_stop in output.replace('\r\n', '\\r\\n'):
+            if b.location in output.replace('\r\n', '\\r\\n'):
                 continue
-            vacuum_until_match(re.escape(b.where_to_stop))
+            vacuum_until_match(re.escape(b.location))
 
 
     def deactivate(self):
@@ -617,11 +695,11 @@ def set_breakpoint():
         with open(BREAKPOINT_FILE, "rt") as file:
             rlwrap_filter.send_output_oob("Found "+ BREAKPOINT_FILE + "\n")
             manager = BreakPointManager()
-            for where_to_stop in file:
-                where_to_stop = where_to_stop.strip() # remove \n at the end of the line
-                if '#' in where_to_stop:
+            for location in file:
+                location = location.strip() # remove \n at the end of the line
+                if '#' in location:
                     continue
-                bp = BreakPoint(where_to_stop)
+                bp = BreakPoint(location)
                 manager.add(bp)
             manager.activate()
     except:
@@ -638,13 +716,21 @@ def vacuum_until_match(substring):
             return
 
 
+@Singleton
+class SourcePathManager:
+    def __init__(self):
+        self.source_path = []
+
+
 def set_sourcepath():
     sourcepath = '' # list of paths delimited by ':'
+    manager = SourcePathManager()
     try:
         with open(SOURCEPATH_FILE, "rt") as file:
             rlwrap_filter.send_output_oob("Found " + SOURCEPATH_FILE + '\n')
             for path in file:
                 path = path.rstrip() # remove \n at the end of the line
+                manager.source_path.append(path)
                 if re.match(r'^\s*#.*', path):
                     continue
                 sourcepath += path + ':'
@@ -695,6 +781,7 @@ def prompt_handler(prompt):
         debug("prompt_handler: prompt=|" + prompt + "|")
         #return prompt
     executor = EnhancedClearCommandExecutor()
+    executor.set_next(ViewFileCommandExecutor())
     prompt = executor.prompt_handler(prompt)
     return prompt
 
@@ -726,6 +813,8 @@ def input_handler(input):
         EnhancedClearCommandExecutor()
     ).set_next(
         RepeatLastCommandExecutor()
+    ).set_next(
+        ViewFileCommandExecutor()
     )
     input_tokens = input.split(' ')
     input_tokens = executor.input_handler(input_tokens)
@@ -739,7 +828,7 @@ def output_handler(output):
     output handler
     """
     executor = EnhancedClearCommandExecutor()
-    #executor.set_next(EnhancedClearCommandExecutor())
+    #executor.set_next(ViewFileCommandExecutor())
     output = executor.output_handler(output)
     return output
 

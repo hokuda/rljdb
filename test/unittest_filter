@@ -156,6 +156,16 @@ class Test300ExpandAcronymExecutor(unittest.TestCase):
         self.assertEqual(expected, actual)
 
 
+class Test300ViewFileCommandExecutor(unittest.TestCase):
+
+    def test_find(self):
+        executor = rljdb_filter.ViewFileCommandExecutor()
+        for f in executor.find('..', 'Test.java'):
+            print("Test300ViewFileCommandExecutor: test_find: " + f)
+            actual = f
+            expected = '../test/Test.java'
+            self.assertEqual(expected, actual)
+
 class Test999Exit(unittest.TestCase):
 
     def test_exit(self):

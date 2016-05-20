@@ -525,7 +525,7 @@ class RepeatLastCommandExecutor(ExecutorBase):
         """
         Remembers the input_tokens, returns last_command when input_tokens is empty
         """
-        if input_tokens[0] == '' and self.last_command[0] in ['s', 'c', 'step', 'cont']:
+        if input_tokens[0] == '' and self.last_command[0] in ['s', 'c', 'n', 'step', 'cont', 'next']:
             input_tokens = self.last_command
         else:
             self.last_command = input_tokens

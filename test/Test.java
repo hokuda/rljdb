@@ -4,7 +4,11 @@ public class Test {
 
     public static void main (String[] args) {
         Test test = new Test();
-        String result = test.test("test");
+        String result = test.test("test0");
+        System.out.println(result);
+        result = test.test("test1");
+        System.out.println(result);
+        result = test.test("test2");
         System.out.println(result);
 
     }

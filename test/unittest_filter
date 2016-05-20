@@ -163,8 +163,17 @@ class Test300ViewFileCommandExecutor(unittest.TestCase):
         for f in executor.find('..', 'Test.java'):
             print("Test300ViewFileCommandExecutor: test_find: " + f)
             actual = f
-            expected = '../test/Test.java'
+            expected = './Test.java'
             self.assertEqual(expected, actual)
+
+class Test300ConditionalBreakpointExecutor(unittest.TestCase):
+
+    def test_get_breakpoint_location_at_line(self):
+        executor = rljdb_filter.ConditionalBreakpointExecutor()
+        output = "Breakpoint hit: \"thread=[main]\", Test.test(), line=14 bci=99"
+        actual = executor.get_breakpoint_location_at_line(output)
+        expected = 'Test:14'
+        self.assertEqual(expected, actual)
 
 class Test999Exit(unittest.TestCase):
 

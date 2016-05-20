@@ -15,10 +15,10 @@ DONE:
 * release breakpoints during completion
 * enahnced clear command
 * enter-key to do last command
+* v command to view source file
 
 
 TODO:
-6. v command to view source file
 8. conditional breakpoint
 9. hit count
 """
@@ -506,7 +506,10 @@ class EnhancedClearCommandExecutor(ExecutorBase):
         manager = BreakPointManager()
         break_points = manager.get_breakpoints()
         for i,b in enumerate(break_points):
-            s = "    {:>2d} {:s}".format(i, b.location)
+            if b.condition:
+                s = "    {:>2d} {:s} if {:s}".format(i, b.location, b.condition)
+            else:
+                s = "    {:>2d} {:s}".format(i, b.location)
             rlwrap_filter.send_output_oob(s + '\n')
 
     
@@ -539,23 +542,6 @@ class ViewFileCommandExecutor(ExecutorBase):
     """
     def __init__(self):
         pass
-
-    def handle_output(self, output):
-        """
-        keep a break point in mind
-        """
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
-              + ": output = " + output
-        )
-        m = re.search(r"Breakpoint hit: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
-        if m:
-            self.classname = m.group(1)
-            self.linenum = m.group(2)
-            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
-                  + ": classname = " + self.classname
-                  + ": linenum = " + self.linenum
-            )
-        return output
 
     def handle_input(self, input_tokens):
         """
@@ -610,6 +596,81 @@ class ViewFileCommandExecutor(ExecutorBase):
                     yield os.path.join(root, file)
 
 
+class ConditionalBreakpointExecutor(ExecutorBase):
+    """
+    Catches "Breakpoint hit: "thread=...", package.ClassName.method(), line=MM bci=NN",
+    repeat "cont" and "print <condition>" until <condition> is true.
+    Supports only 'stop at' command but not 'stop in' command
+    """
+    def __init__(self):
+        super().__init__()
+
+    def handle_prompt(self, prompt):
+        """
+        Fetches cumulative_output if output =~ /^Breakpoint hit:.*/, 
+        parses it, and register classname and line number
+        """
+        output = rlwrap_filter.cumulative_output
+        while(True):
+            location = self.get_breakpoint_location_at_line(output)
+            if location == None:
+                return prompt
+            condition = self.get_condition(location)
+            if condition == None:
+                return prompt
+            if self.is_condition_true(condition):
+                return prompt
+            output = self.do_continue()
+            lines = output.split('\r\n')
+            output_wo_prompt = '\n'.join(lines[0:-2])
+            # output を表示
+            rlwrap_filter.send_output_oob(output_wo_prompt + '\n\n')
+        return prompt
+
+    def do_continue(self):
+        return rlwrap_filter.cloak_and_dagger('cont', PROMPT, 0.1)
+        
+    def get_condition(self, location):
+        manager = BreakPointManager()
+        for b in manager.get_breakpoints():
+            if b.location == location:
+                return b.condition
+        return None
+
+    def is_condition_true(self, condition):
+        output = rlwrap_filter.cloak_and_dagger('print ' + condition, PROMPT, 0.1)
+        result = self.parse_output(output)
+        # condition 評価結果を表示
+        if result:
+            rlwrap_filter.send_output_oob('Conditional breakpoint hit since: '
+                                          + output.split('\r\n')[0]
+                                          + '\n')
+        else:
+            rlwrap_filter.send_output_oob('Conditional breakpoint skipped since: '
+                                          + '\n'.join(output.split('\r\n')[0:-1])
+                                          + '\n')
+        return result
+
+    def parse_output(self, output):
+        tokens = output.split('\r\n')[0].split(' ')
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": tokens = " + ','.join(tokens))
+        return tokens[-1] == 'true'
+    
+    def get_breakpoint_location_at_line(self, output):
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+        m = re.search(r"Breakpoint hit: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
+        if m:
+            class_method = m.group(1)
+            linenum = m.group(2)
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+                  + ": class_method = " + class_method
+                  + ": linenum = " + linenum
+            )
+            class_name = re.match(r'(.+)\.[^\.]+\(.*\)', class_method).group(1)
+            return class_name + ':' + linenum
+        return None
+
+
 class BreakPoint:
     """
     break point
@@ -651,7 +712,7 @@ class BreakPointManager:
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output.replace('\r\n','\\r\\n'))
             if b.location in output.replace('\r\n', '\\r\\n'):
                 continue
-            vacuum_until_match(re.escape(b.location))
+            #vacuum_until_match(re.escape(b.location))
 
 
     def deactivate(self):
@@ -663,7 +724,7 @@ class BreakPointManager:
             debug("BreakPointerManager.deactivate: clear for each bp output=" + output)
             if b in output.replace('\r\n', '\\r\\n'):
                 continue
-            vacuum_until_match(re.escape(b))
+            #vacuum_until_match(re.escape(b))
 
 
     def parse_clear(self, result):
@@ -695,11 +756,18 @@ def set_breakpoint():
         with open(BREAKPOINT_FILE, "rt") as file:
             rlwrap_filter.send_output_oob("Found "+ BREAKPOINT_FILE + "\n")
             manager = BreakPointManager()
-            for location in file:
-                location = location.strip() # remove \n at the end of the line
+            for line in file:
+                line = line.strip() # remove \n at the end of the line
+                m = re.match(r'(.+)\s+if\s+(.+)', line)
+                if m:
+                    location = m.group(1)
+                    condition = m.group(2)
+                else:
+                    location = line
+                    condition = None
                 if '#' in location:
                     continue
-                bp = BreakPoint(location)
+                bp = BreakPoint(location, condition=condition)
                 manager.add(bp)
             manager.activate()
     except:
@@ -781,7 +849,11 @@ def prompt_handler(prompt):
         debug("prompt_handler: prompt=|" + prompt + "|")
         #return prompt
     executor = EnhancedClearCommandExecutor()
-    executor.set_next(ViewFileCommandExecutor())
+    executor.set_next(
+        ViewFileCommandExecutor()
+    ).set_next(
+        ConditionalBreakpointExecutor()
+    )
     prompt = executor.prompt_handler(prompt)
     return prompt
 
@@ -828,7 +900,6 @@ def output_handler(output):
     output handler
     """
     executor = EnhancedClearCommandExecutor()
-    #executor.set_next(ViewFileCommandExecutor())
     output = executor.output_handler(output)
     return output
 
@@ -841,6 +912,7 @@ def get_tokens(line):
     tokens = re.split(r'\s', line.lstrip(' '))
     debug('get_tokes: ["' + '", "'.join(tokens) + '"]')
     return tokens
+
 
 def logit(message, tag):
     """
@@ -856,7 +928,6 @@ def logit(message, tag):
     mangled = re.sub(r'\x1b', r'\\e', mangled)
     debug("logit: {0:10s} '{1}'".format(tagname, mangled))
     return message
-
 
     
 if __name__ == '__main__':

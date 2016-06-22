@@ -767,7 +767,6 @@ def set_breakpoint():
             manager.activate()
     except:
         debug('Could not open ' + BREAKPOINT_FILE)
-        raise
 
 
 def vacuum_until_match(substring):

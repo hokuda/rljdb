@@ -1,6 +1,5 @@
 #!/usr/bin/python3 -u
 #!/usr/bin/pudb3
-
 """
 DONE:
 * set sourcepath
@@ -16,11 +15,12 @@ DONE:
 * enahnced clear command
 * enter-key to do last command
 * v command to view source file
+* conditional breakpoint
 
 
 TODO:
-8. conditional breakpoint
-9. hit count
+- hit count
+- stop command with condition
 """
 
 import sys
@@ -42,7 +42,7 @@ DEBUGLOG_FILE = './rljdb.debug'
 DEBUGLOG = open(DEBUGLOG_FILE, mode='at') # append in text mode
 DEBUG = True
 #PROMPT = r"[>\]] " # default prompt pattern
-PROMPT = r"(^> )|(\[[0-9]+\] )" # default prompt pattern
+PROMPT = r"^(>)|(.+\[[0-9]+\])\s" # default prompt pattern
 COMMANDS = [
     # standard jdb commands
     'connectors',
@@ -394,22 +394,17 @@ class ClassNameCompletionExecutor(ExecutorBase):
             return request
         prefix = request.tokens[-1]
         output = rlwrap_filter.cloak_and_dagger("classes", PROMPT, 5)
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
-    
         classes = re.split(r"\s+", output)
         classes = list(filter((lambda v: re.search(r"^" + prefix, v)), classes))
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": matched classes = " + ",".join(classes))
 
         ind = prefix.rfind(".")
         if ind == -1: # not found '.'
             components = map((lambda x: re.match(r"^(" + prefix + ".*)", x).group(1)), classes)
         else:
             pkg = prefix[:ind]
-            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": pkg = " + pkg)
             components = map((lambda x: re.match(r"^" + pkg + r"\.([^\.]+).*", x).group(1)), classes)
     
         components   = list(set(components)) # dedup
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": uniq components = " + ",".join(components))
 
         if len(components) == 1: # add "var." to completion list
             components.append(components[0] + ".")

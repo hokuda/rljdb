@@ -2,12 +2,20 @@
 
 import unittest
 import sys
+import os
 import re
 import datetime
 import time
-sys.path.append('../../rlwrapfilter.py')
+
+if 'RLWRAP_FILTERDIR' in os.environ:
+    sys.path.append(os.environ['RLWRAP_FILTERDIR'])
+else:
+    sys.path.append('.')
+
 import rlwrapfilter
+
 sys.path.append('../')
+
 import rljdb_filter
         
 rlwrap_filter = rlwrapfilter.RlwrapFilter()
@@ -23,12 +31,13 @@ class Test100CompletionRequest(unittest.TestCase):
 
 class Test200Run(unittest.TestCase):
     """
-    This is not an actual test but only to invoke "run" command.
+    This is not an actual test but only to invoke "run" command
+    to prepare unit tests for executors.
     """
     def test_run(self):
         rljdb_filter.rlwrap_filter.cloak_and_dagger_verbose = True
         rljdb_filter.rlwrap_filter.vacuum_stale_message(PROMPT, 10)
-        request = rljdb_filter.rlwrap_filter.cloak_and_dagger("stop at Test:14", PROMPT, 5)
+        request = rljdb_filter.rlwrap_filter.cloak_and_dagger("stop at Test:18", PROMPT, 5)
         request = rljdb_filter.rlwrap_filter.cloak_and_dagger("run", PROMPT, 5)
         time.sleep(2)
         rljdb_filter.rlwrap_filter.vacuum_stale_message(PROMPT, 10)

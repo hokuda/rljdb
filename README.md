@@ -16,9 +16,8 @@ rljdb is a wrapper script to enhance jdb. It supports:
 
 ## Prerequisites
 
-* rljdb uses rlwrap
-* rlrwapfilter.py
-* rljdb is written in python
+* rljdb uses rlwrap (>=0.43)
+* rljdb is written in python3
 
 ## Installation
 

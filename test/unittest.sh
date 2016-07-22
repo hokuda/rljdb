@@ -1,6 +1,6 @@
 #!/bin/sh
 
 export CLASSPATH=.
-javac -g Test.java
+$JAVA_HOME/bin/javac -g Test.java
 
-rlwrap -C jdb -b ' .' -z ./unittest_filter jdb Test
+rlwrap -C jdb -b ' .' -z ./unittest_filter $JAVA_HOME/bin/jdb Test

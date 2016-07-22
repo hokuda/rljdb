@@ -31,9 +31,11 @@ import time
 import subprocess
 import tempfile
 
-# for development
-#sys.path.append('/home/hokuda/src/github.com/hokuda/rlwrapfilter.py')
-sys.path.append('./')
+if 'RLWRAP_FILTERDIR' in os.environ:
+    sys.path.append(os.environ['RLWRAP_FILTERDIR'])
+else:
+    sys.path.append('.')
+
 import rlwrapfilter
         
 BREAKPOINT_FILE='./rljdb.breakpoint'

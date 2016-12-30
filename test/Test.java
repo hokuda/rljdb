@@ -1,6 +1,11 @@
+import org.test.abc.TestEscapeDotA;
+import org.test.abcdef.TestEscapeDotB;
+
 public class Test {
 
     private String prefix = "Testing ";
+    private TestEscapeDotA testEscapeDotA = new TestEscapeDotA();
+    private TestEscapeDotB testEscapeDotB = new TestEscapeDotB();
 
     public static void main (String[] args) {
         Test test = new Test();

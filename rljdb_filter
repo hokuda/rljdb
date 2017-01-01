@@ -277,7 +277,10 @@ class ClassMemberCompletionExecutor(ExecutorBase):
             request.completions.extend(methods)
             # add "var." to completion list
             debug("ClassMemberCompletionExecutor.handle_completion: len(request.completions)=" + str(len(request.completions)))
-            if len(request.completions)==1:
+            debug("ClassMemberCompletionExecutor.handle_completion: request.completions=" + ','.join(request.completions))
+            debug("ClassMemberCompletionExecutor.handle_completion: tail=" + tail)
+            debug("ClassMemberCompletionExecutor.handle_completion: paren=" + paren)
+            if len(request.completions)==1 and request.completions[0] == tail + paren:
                 request.completions.append(request.completions[0] + ".")
         return request
 
@@ -290,7 +293,7 @@ class ClassMemberCompletionExecutor(ExecutorBase):
         posterior = "service"
         paren     = "(org.apache."
         """
-        m = re.match(r"(.+)\.([^\.\(]+)(\([^\)]*)$", last_token)
+        m = re.match(r"(.+)\.([^\.\(]+)(\([^\)]*[\)]?)$", last_token)
         if m != None:
             debug("ClassMemberCompletionExecutor.parse_last_token: " +
                   "| {0} | {1} | {2} |".format(m.group(1), m.group(2), m.group(3)))
@@ -368,7 +371,8 @@ class ClassMemberCompletionExecutor(ExecutorBase):
         debug("ClassMemberCompletionExecutor.complete_methods: output=" + output)
         methods = self.parse_methods(output)
         debug("ClassMemberCompletionExecutor.complete_methods: methods=[" + ",".join(methods))
-        return list(filter((lambda x: re.search(r"^" + tail , x)), methods))
+        pattern = r'^' + tail + paren.replace(' ', '').replace('(', '\(').replace(')', '\)')
+        return list(filter((lambda x: re.search(pattern , x)), methods))
     
 
     def parse_methods(self, output):
@@ -380,10 +384,12 @@ class ClassMemberCompletionExecutor(ExecutorBase):
                 (lambda m: m.group(2)),
                 filter(
                     (lambda m: m != None),
-                    map((lambda l: re.match(r"([^\s]+)\s([^\s]+)", l)), lines)
+                    map((lambda l: re.match(r"([^\s]+)\s(.+)", l)), lines)
                 )
             )
         )
+        # remove space in each methods
+        methods = list(map((lambda m: m.replace(' ', '')), methods))
         return methods
 
 

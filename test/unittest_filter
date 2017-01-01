@@ -146,13 +146,52 @@ class Test300ClassMemberCompletionExecutor(unittest.TestCase):
         request = executor.handle_completion(request)
         actual = set(request.completions)
         #expected = ['test(java.lang.String)', 'toString()']
-        expected = set(['test(java.lang.String)', 'testEscapeDotA', 'testEscapeDotB'])
+        expected = set([
+            'test(java.lang.String)',
+            'testEscapeDotA',
+            'testEscapeDotB',
+            'test2args(java.lang.String,java.lang.String)'
+        ])
+        rljdb_filter.rlwrap_filter.send_output_oob('\n')
+        rljdb_filter.rlwrap_filter.send_output_oob('actual   = [' + ','.join(actual) + ']\n')
+        rljdb_filter.rlwrap_filter.send_output_oob('expected = [' + ','.join(expected) + ']\n')
         self.assertEqual(expected, actual)
 
+        request = rljdb_filter.CompletionRequest("print this.test2args(java.lang.String", "test2args(java.lang.String", [])
+        request = executor.handle_completion(request)
+        actual = set(request.completions)
+        #expected = ['test(java.lang.String)', 'toString()']
+        expected = set([
+            'test2args(java.lang.String,java.lang.String)'
+        ])
+        rljdb_filter.rlwrap_filter.send_output_oob('\n')
+        rljdb_filter.rlwrap_filter.send_output_oob('actual   = [' + ','.join(actual) + ']\n')
+        rljdb_filter.rlwrap_filter.send_output_oob('expected = [' + ','.join(expected) + ']\n')
+        self.assertEqual(expected, actual)
+
+        request = rljdb_filter.CompletionRequest("print this.test2args(java.lang.String,java.lang.String)", "test2args(java.lang.String,java.lang.String)", [])
+        request = executor.handle_completion(request)
+        actual = set(request.completions)
+        #expected = ['test(java.lang.String)', 'toString()']
+        expected = set([
+            'test2args(java.lang.String,java.lang.String)',
+            'test2args(java.lang.String,java.lang.String).'
+        ])
+        rljdb_filter.rlwrap_filter.send_output_oob('\n')
+        rljdb_filter.rlwrap_filter.send_output_oob('actual   = [' + ','.join(actual) + ']\n')
+        rljdb_filter.rlwrap_filter.send_output_oob('expected = [' + ','.join(expected) + ']\n')
+        self.assertEqual(expected, actual)
+        
         request = rljdb_filter.CompletionRequest("print this.p", "p", [])
         request = executor.handle_completion(request)
         actual = request.completions
-        expected = ["prefix", "prefix."]
+        expected = ["prefix"]
+        self.assertEqual(expected, actual)
+
+        request = rljdb_filter.CompletionRequest("print this.prefix", "prefix", [])
+        request = executor.handle_completion(request)
+        actual = request.completions
+        expected = ["prefix", 'prefix.']
         self.assertEqual(expected, actual)
 
 

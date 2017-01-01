@@ -16,10 +16,16 @@ public class Test {
         result = test.test("test2");
         //System.out.println(result);
 
+        result = test.test2args("arg1value", "arg2value");
     }
 
     public String test(String arg) {
         String result = this.prefix + arg;
+        return result;
+    }
+
+    public String test2args(String arg1, String arg2) {
+        String result = this.prefix + arg1 + arg2;
         return result;
     }
 }

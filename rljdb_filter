@@ -410,8 +410,8 @@ class ClassNameCompletionExecutor(ExecutorBase):
             return request
         prefix = request.tokens[-1]
         escape_dots_prefix = self.escape_dots(prefix)
-        rlwrapfilter.set_stoptext_search_area(-256, None)
-        output = rlwrap_filter.cloak_and_dagger("classes", PROMPT, 5)
+        #rlwrapfilter.set_stoptext_search_area(-256, None)
+        output = rlwrap_filter.cloak_and_dagger("classes", PROMPT, 5, prompt_search_from=-256)
         classes = re.split(r"\s+", output)
         classes = list(filter((lambda v: re.search(r"^" + escape_dots_prefix, v)), classes))
 

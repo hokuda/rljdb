@@ -409,11 +409,9 @@ class ClassNameCompletionExecutor(ExecutorBase):
         if not request.tokens[0] in ['print', 'dump', 'p', 'stop', 'b', 'class', 'clear', 'watch', 'unwatch']:
             return request
         prefix = request.tokens[-1]
-        escape_dots_prefix = self.escape_dots(prefix)
-        #rlwrapfilter.set_stoptext_search_area(-256, None)
         output = rlwrap_filter.cloak_and_dagger("classes", PROMPT, 5, prompt_search_from=-256)
         classes = re.split(r"\s+", output)
-        classes = list(filter((lambda v: re.search(r"^" + escape_dots_prefix, v)), classes))
+        classes = list(filter((lambda x: x.startswith(prefix)), classes))
 
         ind = prefix.rfind(".")
         if ind == -1: # not found '.'

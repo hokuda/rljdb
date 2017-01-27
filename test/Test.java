@@ -28,4 +28,14 @@ public class Test {
         String result = this.prefix + arg1 + arg2;
         return result;
     }
+    
+    public String classNameCompletionTest(String arg1, String arg2) {
+        String result = this.prefix + arg1 + arg2;
+        return result;
+    }
+
+    public String classNameCompletionTest(String arg1, int arg2) {
+        String result = this.prefix + arg1 + arg2;
+        return result;
+    }
 }

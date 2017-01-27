@@ -223,6 +223,14 @@ class Test300ClassNameCompletionExecutor(unittest.TestCase):
         except AttributeError:
             self.assertTrue(False)
 
+        # not to crash when '(' is given in prefix
+        try:
+            request = rljdb_filter.CompletionRequest("stop in Test(", "", [])
+            result = executor.handle_completion(request)
+            self.assertTrue(True)
+        except Exception:
+            self.assertTrue(False)
+
 
 class Test300ExpandAcronymExecutor(unittest.TestCase):
 

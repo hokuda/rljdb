@@ -274,7 +274,16 @@ class ClassMemberCompletionExecutor(ExecutorBase):
                 debug("ClassMemberCompletionExecutor.handle_completion: fields=[" + ",".join(fields))
                 request.completions.extend(fields)
             methods = self.complete_methods(class_name, tail, paren)
-            request.completions.extend(methods)
+            # TODO:
+            # the below 8 lines generate ugly output, but no choice due to limitation of break chars ' .' (-b option)
+            index_of_last_dot = (tail+paren).rfind('.')
+            if(index_of_last_dot > 0):
+                before_last_dot = (tail+paren)[0:index_of_last_dot]
+                len_before_last_dot = len(before_last_dot)
+                candidates = map((lambda m: m[len_before_last_dot+1:]), methods)
+            else:
+                candidates = methods
+            request.completions.extend(candidates)
             # add "var." to completion list
             debug("ClassMemberCompletionExecutor.handle_completion: len(request.completions)=" + str(len(request.completions)))
             debug("ClassMemberCompletionExecutor.handle_completion: request.completions=" + ','.join(request.completions))

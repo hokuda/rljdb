@@ -160,9 +160,8 @@ class Test300ClassMemberCompletionExecutor(unittest.TestCase):
         request = rljdb_filter.CompletionRequest("print this.test2args(java.lang.String", "test2args(java.lang.String", [])
         request = executor.handle_completion(request)
         actual = set(request.completions)
-        #expected = ['test(java.lang.String)', 'toString()']
         expected = set([
-            'test2args(java.lang.String,java.lang.String)'
+            'String,java.lang.String)'
         ])
         rljdb_filter.rlwrap_filter.send_output_oob('\n')
         rljdb_filter.rlwrap_filter.send_output_oob('actual   = [' + ','.join(actual) + ']\n')
@@ -174,8 +173,7 @@ class Test300ClassMemberCompletionExecutor(unittest.TestCase):
         actual = set(request.completions)
         #expected = ['test(java.lang.String)', 'toString()']
         expected = set([
-            'test2args(java.lang.String,java.lang.String)',
-            'test2args(java.lang.String,java.lang.String).'
+            'String)'
         ])
         rljdb_filter.rlwrap_filter.send_output_oob('\n')
         rljdb_filter.rlwrap_filter.send_output_oob('actual   = [' + ','.join(actual) + ']\n')

@@ -175,7 +175,7 @@ class ExecutorBase:
         
     def completion_handler(self, request):
         request = self.handle_completion(request)
-        if len(request.completions) == 1 and self.next != None: # req.completions==['']
+        if len(request.completions) == 0 and self.next != None: # req.completions==['']
             request = self.next.completion_handler(request)
         return request
 

@@ -127,18 +127,17 @@ ACRONYMS = {
 
 rlwrap_filter = rlwrapfilter.RlwrapFilter()
 
-class Singleton:
+class Singleton(type):
     """
-    singleton decorator
+    singleton metaclass
     """
-    def __init__(self,klass):
-        self.klass = klass
-        self.instance = None
-    def __call__(self,*args,**kwds):
-        if self.instance == None:
-            self.instance = self.klass(*args,**kwds)
-        self.instance.next = None
-        return self.instance
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            instance = super(Singleton, cls).__call__(*args, **kwargs)
+            cls._instances[cls] = instance
+        cls._instances[cls].next = None
+        return cls._instances[cls]
 
 
 class CompletionRequest:
@@ -209,6 +208,9 @@ class ExecutorBase:
     
 
 class CommandNameCompletionExecutor(ExecutorBase):
+    def __init__(self):
+        super().__init__()
+
     def handle_completion(self, request):
         if len(request.tokens) != 1:
             return request
@@ -219,6 +221,9 @@ class CommandNameCompletionExecutor(ExecutorBase):
 
     
 class LocalsCompletionExecutor(ExecutorBase):
+    def __init__(self):
+        super().__init__()
+
     def handle_completion(self, request):
         if request.tokens[-1] != request.prefix:
             return request
@@ -256,6 +261,9 @@ class ClassMemberCompletionExecutor(ExecutorBase):
     """
     complete names of fields and methods
     """
+    def __init__(self):
+        super().__init__()
+
     def handle_completion(self, request):
         if not request.tokens[0] in ['print', 'dump', 'p', 'eval', 'set', 'stop', 'b', 'class', 'clear', 'watch', 'unwatch']:
             return request
@@ -405,6 +413,9 @@ class ClassMemberCompletionExecutor(ExecutorBase):
 
 class ClassNameCompletionExecutor(ExecutorBase):
 
+    def __init__(self):
+        super().__init__()
+
     def escape_dots(self, string):
         """
         escape dots
@@ -443,6 +454,9 @@ class ExpandAcronymExecutor(ExecutorBase):
     """
     replace an acronym to a long form
     """
+    def __init__(self):
+        super().__init__()
+
     def handle_input(self, input_tokens):
         for (index, token) in enumerate(input_tokens):
             if len(token) == 0:
@@ -458,8 +472,7 @@ class ExpandAcronymExecutor(ExecutorBase):
         return input_tokens
 
 
-@Singleton
-class EnhancedClearCommandExecutor(ExecutorBase):
+class EnhancedClearCommandExecutor(ExecutorBase, metaclass=Singleton):
     """
     `clear` or `stop` command shows # and breakpoints
     `clear #` removes #th breakpoint
@@ -534,9 +547,81 @@ class EnhancedClearCommandExecutor(ExecutorBase):
             rlwrap_filter.send_output_oob(s + '\n')
 
     
+class EnhancedStopCommandExecutor(EnhancedClearCommandExecutor, metaclass=Singleton):
+    """
+    `stop` command with no argument shows # and breakpoints
+    `stop in|at <breakpoint> if <condition>` sets a conditional breakpoint
+    """
+    def __init__(self):
+        super().__init__()
+        self.stop_command_invoked = False
 
-@Singleton
-class RepeatLastCommandExecutor(ExecutorBase):
+    def handle_input(self, input_tokens):
+        """
+        set breakpoint
+        """
+        if input_tokens[0] != 'stop': # not 'stop' command
+            return(input_tokens)
+        if input_tokens[1] == 'in': # 'stop in' has no enhancement
+            return(input_tokens)
+        if len(input_tokens) == 1: # 'stop' with no arg
+            self.stop_command_invoked = True
+            return(input_tokens)
+        try:
+            location = input_token[2]
+            condition = input_token[4:]
+            breakpoint = BreakPoint(location, condition=condition)
+            manager = BreakPointManager()
+            manager.deactivate()
+            manager.add(breakpoint)
+            manager.activate()
+            return []
+        except ValueError:
+            pass
+        return input_tokens
+
+
+    def handle_output(self, output):
+        """
+        Eats output if output =~ /^Breakpoints set:.*/ or self.index_out_of_bound == True
+        """
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+        if re.search(r"Breakpoints set:", output) or self.index_out_of_bound ==True:
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": ho------------- = " + output)
+            return ""
+        return output
+    
+    
+    def handle_prompt(self, prompt):
+        """
+        Fetches cumulative_output if output =~ /^Breakpoints set:.*/, 
+        modify it, 
+        and put it to console
+        """
+        output = rlwrap_filter.cumulative_output
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+        if self.index_out_of_bound == True:
+            rlwrap_filter.send_output_oob('index out of bound\n')
+        if self.clear_command_invoked == True:
+            rlwrap_filter.send_output_oob('Breakpoints set:\n')
+            self.print_breakpoints()
+        self.index_out_of_bound = False
+        self.clear_command_invoked = False
+        return prompt
+
+
+    def print_breakpoints(self):
+        manager = BreakPointManager()
+        break_points = manager.get_breakpoints()
+        for i,b in enumerate(break_points):
+            if b.condition:
+                s = "    {:>2d} {:s} if {:s}".format(i, b.location, b.condition)
+            else:
+                s = "    {:>2d} {:s}".format(i, b.location)
+            rlwrap_filter.send_output_oob(s + '\n')
+
+    
+class RepeatLastCommandExecutor(ExecutorBase, metaclass=Singleton):
     """
     Pressing enter key without typing a command do the last command to step
     """
@@ -556,13 +641,12 @@ class RepeatLastCommandExecutor(ExecutorBase):
         return input_tokens
 
 
-@Singleton
-class ViewFileCommandExecutor(ExecutorBase):
+class ViewFileCommandExecutor(ExecutorBase, metaclass=Singleton):
     """
     emacsclient -n -e '(find-file-read-only "~/.emacs")' -e '(goto-line 40)'
     """
     def __init__(self):
-        pass
+        super().__init__()
 
     def handle_input(self, input_tokens):
         """
@@ -702,8 +786,7 @@ class BreakPoint:
         self.hit_count = hit_count
 
 
-@Singleton
-class BreakPointManager:
+class BreakPointManager(metaclass=Singleton):
     def __init__(self):
         self.break_points = []
 
@@ -804,8 +887,7 @@ def vacuum_until_match(substring):
             return
 
 
-@Singleton
-class SourcePathManager:
+class SourcePathManager(metaclass=Singleton):
     def __init__(self):
         self.source_path = []
 
@@ -873,6 +955,8 @@ def prompt_handler(prompt):
         ViewFileCommandExecutor()
     ).set_next(
         ConditionalBreakpointExecutor()
+#    ).set_next(
+#        EnhancedStopCommandExecutor()
     )
     prompt = executor.prompt_handler(prompt)
     return prompt

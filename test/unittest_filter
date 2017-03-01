@@ -234,8 +234,8 @@ class Test300ExpandAcronymExecutor(unittest.TestCase):
 
     def test_handle_input(self):
         executor = rljdb_filter.ExpandAcronymExecutor()
-        actual = executor.handle_input(['', '', 's', 'hoge'])
-        expected = ['', '', 'step', 'hoge']
+        actual = executor.handle_input('  s  hoge  fuga  ')
+        expected = 'step  hoge  fuga'
         self.assertEqual(expected, actual)
 
 

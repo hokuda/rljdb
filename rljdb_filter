@@ -16,12 +16,14 @@ DONE:
 * enahnced clear command
 * enter-key to do last command
 * v command to view source file
-* conditional breakpoint
+* conditional breakpoint (read rljdb.breakpoint at startup)
 
 
 TODO:
 - hit count
-- stop command with condition
+- conditional stop command in prompt
+- parse conditional breakpoint using pyparsing
+- disable/enable breakpoint
 """
 
 import sys
@@ -102,15 +104,10 @@ COMMANDS = [
     'version',
     'exit',
     'quit',
-    'v', # view source code
-    # acronyms and custom commands
-    's', # step
-    'c', # cont
-    'p', # print
-    'n', # next
-    'w', # where
-    'd', # dump
-    'l', # list
+    #### custom commands
+    'view', # view source code
+    'break', # set/show break point
+    'delete', # delete break point
     ]
 
 LONGNAMES = {
@@ -121,6 +118,7 @@ LONGNAMES = {
     'w':'where',
     'd':'dump',
     'l':'list',
+    'v':'view',
     }
 
 ACRONYMS = {LONGNAMES[k] : k for k in LONGNAMES} # reverse map of LONGNAMES
@@ -469,76 +467,107 @@ class ExpandAcronymExecutor(ExecutorBase):
             return input
 
 
-class EnhancedClearCommandExecutor(ExecutorBase, metaclass=Singleton):
+class AbstractCustomCommandExecutor(ExecutorBase, metaclass=Singleton):
     """
-    `clear` or `stop` command shows # and breakpoints
-    `clear #` removes #th breakpoint
+    Abstract class to implement your own custom command.
+
+    usage:
+    1. Declare the subclass and implement the following methods:
+    - is_the_command(input) identify if the input is your custom command
+    - do_the_command(input) does what you want input do
+
+    2. Register the subclass in input_handler, output_handler, and prompt_handler.
+    """
+    def __init__(self):
+        super().__init__()
+        self.command_entered = False
+
+    def handle_input(self, input):
+        """
+        stores input in self.input and returns input without any change.
+        This entails the input is executed, though output of the result is dropped in handle_output. 
+        You may have to take care of the side effect.
+        """
+        self.input = input
+        if self.is_the_command(input):
+            self.command_entered = True
+        return input
+
+    def is_the_command(self, input):
+        """
+        identify if the input is your custom command
+        """
+        raise NotImplementedError()
+
+    def handle_output(self, output):
+        """
+        Eats output if self.command_invoked == True
+        """
+        if self.command_entered == True:
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+                  + ": output = " + output)
+            return ''
+        return output
+    
+    def handle_prompt(self, prompt):
+        """
+        does what you really want to do with input command and write results you make to console
+        """
+        if self.command_entered == True:
+            self.do_the_command(self.input)
+            self.command_entered = False
+        return prompt
+
+    def do_the_command(self, input):
+        raise NotImplementedError()
+    
+
+class DeleteCommandExecutor(AbstractCustomCommandExecutor, metaclass=Singleton):
+    """
+    `delete` shows breakpoints
+    `delete #` removes #th breakpoint
     """
     def __init__(self):
         super().__init__()
         self.index_out_of_bound = False
-        self.command_invoked = False
 
+    def is_the_command(self, input):
+        tokens = input.strip().split()
+        if tokens and tokens[0] == 'delete':
+            return True
+        else:
+            return False
 
-    def handle_input(self, input):
+    def do_the_command(self, input):
         """
-        Removes #th break point
+        Show break points/Removes #th break point
         """
-        input_tokens = input.strip().split() # not typo. strip().split(' ') is bad here
-        if input_tokens[0] != 'clear':
-            return input
-        self.command_invoked = True
-        if len(input_tokens) == 1: # 'clear' with no arg
-            return input
+        tokens = input.strip().split() # not a typo. strip().split(' ') is bad here
         try:
-            index = int(input_tokens[1])
-            manager = BreakPointManager()
-            size = len(manager.get_breakpoints())
-            if index > size-1:
-                #rlwrap_filter.send_output_oob('index out of bound\n')
-                self.index_out_of_bound = True
-                return input
-            b = manager.get_breakpoint(index)
-            manager.remove(index)
-            return 'clear ' + b.location
+            index = int(tokens[1])
         except ValueError:
-            pass
-        #return input
-        return ''
-
-
-    def handle_output(self, output):
-        """
-        Eats output if output =~ /^Breakpoints set:.*/ or self.index_out_of_bound == True
-        """
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
-        if re.search(r"Breakpoints set:", output) or self.index_out_of_bound ==True:
-            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": ho------------- = " + output)
-            return ""
-        return output
-    
-    
-    def handle_prompt(self, prompt):
-        """
-        Fetches cumulative_output if output =~ /^Breakpoints set:.*/, 
-        modify it, 
-        and put it to console
-        """
-        output = rlwrap_filter.cumulative_output
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
-        if self.index_out_of_bound == True:
-            rlwrap_filter.send_output_oob('index out of bound\n')
-        if self.command_invoked == True:
-            rlwrap_filter.send_output_oob('Breakpoints set:\n')
+            self.print_help()
+            return
+        except IndexError:
             self.print_breakpoints()
-        self.index_out_of_bound = False
-        self.command_invoked = False
-        return prompt
-
+            return
+        try:
+            manager = BreakPointManager()
+            breakpoint = manager.get_breakpoint(index)
+            manager.remove(index)
+            manager.deactivate()
+            manager.activate()
+            rlwrap_filter.send_output_oob('Deleted: ' + breakpoint.location + '\n')
+        except IndexError:
+            rlwrap_filter.send_output_oob('index out of range\n')
+            self.print_breakpoints()
 
     def print_breakpoints(self):
         manager = BreakPointManager()
         break_points = manager.get_breakpoints()
+        if not break_points:
+            rlwrap_filter.send_output_oob('No breakpoint\n')
+            return
         for i,b in enumerate(break_points):
             if b.condition:
                 s = "    {:>2d} {:s} if {:s}".format(i, b.location, b.condition)
@@ -546,39 +575,45 @@ class EnhancedClearCommandExecutor(ExecutorBase, metaclass=Singleton):
                 s = "    {:>2d} {:s}".format(i, b.location)
             rlwrap_filter.send_output_oob(s + '\n')
 
+    def print_help(self):
+        rlwrap_filter.send_output_oob(
+            "Usage: delete\n" +
+            "       delete <number>\n"
+        )
+        
     
-class EnhancedStopCommandExecutor(EnhancedClearCommandExecutor, metaclass=Singleton):
-    """
-    `stop` command with no argument shows # and breakpoints
-    `stop in|at <breakpoint> if <condition>` sets a conditional breakpoint
-    """
-    def __init__(self):
-        super().__init__()
-
-    def handle_input(self, input):
-        """
-        set breakpoint
-        """
-        input_tokens = input.strip().split(' ')
-        if input_tokens[0] != 'stop': # not 'stop' command
-            return input
-        if len(input_tokens) == 1: # 'stop' with no arg
-            self.command_invoked = True
-            return input
-        if input_tokens[1] == 'in': # 'stop in' has no enhancement
-            return input
-        try:
-            location = input_tokens[2]
-            condition = input_tokens[4:]
-            breakpoint = BreakPoint(location, condition=condition)
-            manager = BreakPointManager()
-            manager.deactivate()
-            manager.add(breakpoint)
-            manager.activate()
-            return ''
-        except ValueError:
-            pass
-        return input
+#class EnhancedStopCommandExecutor(EnhancedClearCommandExecutor, metaclass=Singleton):
+##n    """
+#    `stop` command with no argument shows # and breakpoints
+#    `stop in|at <breakpoint> if <condition>` sets a conditional breakpoint
+#    """
+#    def __init__(self):
+#        super().__init__()
+#
+#    def handle_input(self, input):
+#        """
+#        set breakpoint
+#        """
+#        input_tokens = input.strip().split(' ')
+#        if input_tokens[0] != 'stop': # not 'stop' command
+#            return input
+#        if len(input_tokens) == 1: # 'stop' with no arg
+#            self.command_invoked = True
+#            return input
+#        if input_tokens[1] == 'in': # 'stop in' has no enhancement
+#            return input
+#        try:
+#            location = input_tokens[2]
+#            condition = input_tokens[4:]
+#            breakpoint = BreakPoint(location, condition=condition)
+#            manager = BreakPointManager()
+#            manager.deactivate()
+#            manager.add(breakpoint)
+#            manager.activate()
+#            return ''
+#        except ValueError:
+#            pass
+#        return input
 
 
 class RepeatLastCommandExecutor(ExecutorBase, metaclass=Singleton):
@@ -914,13 +949,13 @@ def prompt_handler(prompt):
         initialize()
         debug("prompt_handler: prompt=|" + prompt + "|")
         #return prompt
-    executor = EnhancedClearCommandExecutor()
+    executor = DeleteCommandExecutor()
     executor.set_next(
         ViewFileCommandExecutor()
     ).set_next(
         ConditionalBreakpointExecutor()
-    ).set_next(
-        EnhancedStopCommandExecutor()
+#    ).set_next(
+#        EnhancedStopCommandExecutor()
     )
     prompt = executor.prompt_handler(prompt)
     return prompt
@@ -950,9 +985,9 @@ def input_handler(input):
     """
     executor = ExpandAcronymExecutor()
     executor.set_next(
-        EnhancedClearCommandExecutor()
-    ).set_next(
-        EnhancedStopCommandExecutor()
+        DeleteCommandExecutor()
+#    ).set_next(
+#        EnhancedStopCommandExecutor()
     ).set_next(
         RepeatLastCommandExecutor()
     ).set_next(
@@ -966,10 +1001,10 @@ def output_handler(output):
     """
     output handler
     """
-    executor = EnhancedClearCommandExecutor()
-    executor.set_next(
-        EnhancedStopCommandExecutor()
-    )
+    executor = DeleteCommandExecutor()
+#    executor.set_next(
+#        EnhancedStopCommandExecutor()
+#    )
     output = executor.output_handler(output)
     return output
 

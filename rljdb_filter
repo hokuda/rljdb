@@ -1,6 +1,7 @@
+#!/usr/bin/pudb3
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
-#!/usr/bin/pudb3
+# 文字化け防止コメント
 """
 DONE:
 * set sourcepath
@@ -124,6 +125,7 @@ LONGNAMES = {
 ACRONYMS = {LONGNAMES[k] : k for k in LONGNAMES} # reverse map of LONGNAMES
 
 rlwrap_filter = rlwrapfilter.RlwrapFilter()
+
 
 class Singleton(type):
     """
@@ -474,7 +476,7 @@ class AbstractCustomCommandExecutor(ExecutorBase, metaclass=Singleton):
     usage:
     1. Declare the subclass and implement the following methods:
     - is_the_command(input) identify if the input is your custom command
-    - do_the_command(input) does what you want input do
+    - do_the_command(input) does what you want with the command
 
     2. Register the subclass in input_handler, output_handler, and prompt_handler.
     """
@@ -553,26 +555,22 @@ class DeleteCommandExecutor(AbstractCustomCommandExecutor, metaclass=Singleton):
             return
         try:
             manager = BreakPointManager()
-            breakpoint = manager.get_breakpoint(index)
+            breakpoint = manager.get(index)
+            breakpoint.disable()
             manager.remove(index)
-            manager.deactivate()
-            manager.activate()
-            rlwrap_filter.send_output_oob('Deleted: ' + breakpoint.location + '\n')
+            manager.print_result()
         except IndexError:
             rlwrap_filter.send_output_oob('index out of range\n')
             self.print_breakpoints()
 
     def print_breakpoints(self):
         manager = BreakPointManager()
-        break_points = manager.get_breakpoints()
-        if not break_points:
+        breakpoints = manager.get_all()
+        if not breakpoints:
             rlwrap_filter.send_output_oob('No breakpoint\n')
             return
-        for i,b in enumerate(break_points):
-            if b.condition:
-                s = "    {:>2d} {:s} if {:s}".format(i, b.location, b.condition)
-            else:
-                s = "    {:>2d} {:s}".format(i, b.location)
+        for i,b in enumerate(breakpoints):
+            s = "    {:>2d} {:s}".format(i, b.to_string())
             rlwrap_filter.send_output_oob(s + '\n')
 
     def print_help(self):
@@ -582,38 +580,38 @@ class DeleteCommandExecutor(AbstractCustomCommandExecutor, metaclass=Singleton):
         )
         
     
-#class EnhancedStopCommandExecutor(EnhancedClearCommandExecutor, metaclass=Singleton):
-##n    """
-#    `stop` command with no argument shows # and breakpoints
-#    `stop in|at <breakpoint> if <condition>` sets a conditional breakpoint
-#    """
-#    def __init__(self):
-#        super().__init__()
-#
-#    def handle_input(self, input):
-#        """
-#        set breakpoint
-#        """
-#        input_tokens = input.strip().split(' ')
-#        if input_tokens[0] != 'stop': # not 'stop' command
-#            return input
-#        if len(input_tokens) == 1: # 'stop' with no arg
-#            self.command_invoked = True
-#            return input
-#        if input_tokens[1] == 'in': # 'stop in' has no enhancement
-#            return input
-#        try:
-#            location = input_tokens[2]
-#            condition = input_tokens[4:]
-#            breakpoint = BreakPoint(location, condition=condition)
-#            manager = BreakPointManager()
-#            manager.deactivate()
-#            manager.add(breakpoint)
-#            manager.activate()
-#            return ''
-#        except ValueError:
-#            pass
-#        return input
+class BreakCommandExecutor(DeleteCommandExecutor, metaclass=Singleton):
+    """
+    `stop` command with no argument shows # and breakpoints
+    `stop in|at <breakpoint> if <condition>` sets a conditional breakpoint
+    """
+    def __init__(self):
+        super().__init__()
+
+    def is_the_command(self, input):
+        tokens = input.strip().split()
+        if tokens and tokens[0] == 'break':
+            return True
+        else:
+            return False
+
+    def do_the_command(self, input):
+        """
+        Show break points/Removes #th break point
+        """
+        tokens = input.strip().split(None, 1) # split into the command name and <breakpoint [if condition]>
+        if len(tokens) == 1:
+            self.print_breakpoints()
+            return
+        try:
+            manager = BreakPointManager()
+            factory = BreakPointFactory()
+            breakpoint = factory.create(tokens[1])
+            manager.add(breakpoint)
+            manager.print_result()
+        except IndexError:
+            rlwrap_filter.send_output_oob('index out of range\n')
+            self.print_breakpoints()
 
 
 class RepeatLastCommandExecutor(ExecutorBase, metaclass=Singleton):
@@ -715,20 +713,20 @@ class ConditionalBreakpointExecutor(ExecutorBase):
         parses it, and register classname and line number
         """
         output = rlwrap_filter.cumulative_output
-        while(True):
-            location = self.get_breakpoint_location_at_line(output)
-            if location == None:
-                return prompt
-            condition = self.get_condition(location)
-            if condition == None:
-                return prompt
-            if self.is_condition_true(condition):
-                return prompt
-            output = self.do_continue()
-            lines = output.split('\r\n')
-            output_wo_prompt = '\n'.join(lines[0:-2])
-            # output を表示
-            rlwrap_filter.send_output_oob(output_wo_prompt + '\n\n')
+        location = self.get_breakpoint_location_at_line(output)
+        if location == None:
+            return prompt
+        condition = self.get_condition(location)
+        if condition == None:
+            return prompt
+        if self.is_condition_true(condition):
+            return prompt
+        output = self.do_continue()
+        lines = output.split('\r\n')
+        output_wo_prompt = '\n'.join(lines[0:-2])
+        # print output
+        rlwrap_filter.send_output_oob(output_wo_prompt + '\n\n')
+        rlwrap_filter.cumulative_output = ''
         return prompt
 
     def do_continue(self):
@@ -736,7 +734,7 @@ class ConditionalBreakpointExecutor(ExecutorBase):
         
     def get_condition(self, location):
         manager = BreakPointManager()
-        for b in manager.get_breakpoints():
+        for b in manager.get_all():
             if b.location == location:
                 return b.condition
         return None
@@ -744,7 +742,7 @@ class ConditionalBreakpointExecutor(ExecutorBase):
     def is_condition_true(self, condition):
         output = rlwrap_filter.cloak_and_dagger('print ' + condition, PROMPT, 0.1)
         result = self.parse_output(output)
-        # condition 評価結果を表示
+        # condition 隧穂ｾ｡邨先棡繧定｡ｨ遉ｺ
         if result:
             rlwrap_filter.send_output_oob('Conditional breakpoint hit since: '
                                           + output.split('\r\n')[0]
@@ -775,106 +773,127 @@ class ConditionalBreakpointExecutor(ExecutorBase):
         return None
 
 
-class BreakPoint:
+class BreakPointBase:
     """
     break point
     """
-    def __init__(self, location, condition=None, hit_count=None):
+    def __init__(self, location=None, condition=None):
         self.location = location
         self.condition = condition
-        self.hit_count = hit_count
+
+    def enable(self):
+        raise NotImplementedError()
+
+    def disable(self):
+        output = rlwrap_filter.cloak_and_dagger("clear " + self.location, PROMPT, 0.1)
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+
+    def to_string(self):
+        raise NotImplementedError()
+
+
+class BreakPointInMethod(BreakPointBase):
+
+    def enable(self):
+        output = rlwrap_filter.cloak_and_dagger("stop in " + self.location, PROMPT, 0.1)
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+
+    def to_string(self):
+        return self.location
+
+
+class BreakPointAtLine(BreakPointBase):
+
+    def enable(self):
+        output = rlwrap_filter.cloak_and_dagger("stop at " + self.location, PROMPT, 0.1)
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+
+    def to_string(self):
+        if self.condition:
+            return self.location + ' if ' + self.condition
+        else:
+            return self.location
+
+
+class BreakPointFactory(metaclass=Singleton):
+    def __init__(self):
+        pass
+
+    def create(self, expression):
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": creating a break point for " + expression)
+        m = re.match(r'(.+)\s+if\s+(.+)', expression)
+        if m:
+            location = m.group(1)
+            condition = m.group(2)
+        else:
+            location = expression
+            condition = None
+        if re.match(r'\S+:[0-9]+', location):
+            return BreakPointAtLine(location, condition=condition)
+        return BreakPointInMethod(location)
 
 
 class BreakPointManager(metaclass=Singleton):
     def __init__(self):
         self.break_points = []
+        self.result = None
 
-    def get_breakpoints(self):
+    def add(self, break_point):
+        for existing in self.break_points:
+            if not break_point.location == existing.location:
+                continue
+            existing.disable()
+            self.break_points.remove(existing)
+            self.result = 'Replaced existing "' + existing.to_string() + '" with "' + break_point.to_string() + '"'
+            break
+        else:
+            self.result = 'Added "' + break_point.to_string() + '"'
+                
+        self.break_points.append(break_point)
+        break_point.enable()
+        return self.break_points.index(break_point)
+
+    def remove(self, i):
+        removed = self.break_points.pop(i)
+        self.result = 'Deleted: ' + removed.to_string()
+            
+    def get_all(self):
         return self.break_points
     
-    def add(self, break_point):
-        self.break_points.append(break_point)
-
-    def get_breakpoint(self, i):
+    def get(self, i):
         return self.break_points[i]
         
-    def remove(self, i):
-        del self.break_points[i]
-
-    def get(self, index):
-        pass
-
-    def activate(self):
+    def enable_all(self):
         for b in self.break_points:
-            if re.match(r".*:.*", b.location):
-                output = rlwrap_filter.cloak_and_dagger("stop at " + b.location, PROMPT, 0.1)
-            else:
-                output = rlwrap_filter.cloak_and_dagger("stop in " + b.location, PROMPT, 0.1)
-            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
-            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": location = " + b.location)
-            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output.replace('\r\n','\\r\\n'))
-            if b.location in output.replace('\r\n', '\\r\\n'):
-                continue
-            #vacuum_until_match(re.escape(b.location))
+            b.enable()
 
+    def disable_all(self):
+        for b in self.break_points:
+            b.disable()
 
-    def deactivate(self):
-        result = rlwrap_filter.cloak_and_dagger("clear", PROMPT, 0.1)
-        break_points = self.parse_clear(result)
-        debug("BreakPointerManager.deactivate: bread points=[" + ",".join(break_points) + "]")
-        for b in break_points:
-            output = rlwrap_filter.cloak_and_dagger("clear " + b, PROMPT, 0.1)
-            debug("BreakPointerManager.deactivate: clear for each bp output=" + output)
-            if b in output.replace('\r\n', '\\r\\n'):
-                continue
-            #vacuum_until_match(re.escape(b))
-
-
-    def parse_clear(self, result):
-        lines = result.split('\r\n')
-        lines.reverse()
-        lines.pop() # remove first line
-        vars = list(
-            filter(
-                (lambda x: x!=None),
-                map(self.extract_breakpoint, lines)
-                )
-            )
-        debug("BreakPointerManager.parse_clear: vars=" + ",".join(vars))
-        return vars
-
-    def extract_breakpoint(self, line):
-        debug("BreakPointerManager.extract_breakpoint: line=" + line)
-        m = re.search(r".*breakpoint (.*)", line)
-        if m == None:
-            debug("BreakPointerManager.extract_breakpoint: m.group(1)=None")
-            return None
-        else:
-            debug("BreakPointerManager.extract_breakpoint: m.group(1)=" + m.group(1))
-            return m.group(1)
+    def print_result(self):
+        rlwrap_filter.send_output_oob(self.result)
+        rlwrap_filter.send_output_oob('\n')
 
 
 def set_breakpoint():
     try:
         with open(BREAKPOINT_FILE, "rt") as file:
             rlwrap_filter.send_output_oob("Found "+ BREAKPOINT_FILE + "\n")
+            debug(sys._getframe().f_code.co_name + ": read from : " + str(file))
             manager = BreakPointManager()
+            factory = BreakPointFactory()
             for line in file:
+                debug(sys._getframe().f_code.co_name + ": read: " + line)
                 line = line.strip() # remove \n at the end of the line
-                m = re.match(r'(.+)\s+if\s+(.+)', line)
-                if m:
-                    location = m.group(1)
-                    condition = m.group(2)
-                else:
-                    location = line
-                    condition = None
-                if '#' in location:
+                if line.startswith('#'):
                     continue
-                bp = BreakPoint(location, condition=condition)
-                manager.add(bp)
-            manager.activate()
-    except:
-        debug('Could not open ' + BREAKPOINT_FILE)
+                b = factory.create(line)
+                manager.add(b)
+    except io.TextIOBase as e:
+        rlwrap_filter.send_output_oob('Could not open ' + BREAKPOINT_FILE + ' (' + str(e) + ')')
+    except Exception as e:
+        raise e
 
 
 def vacuum_until_match(substring):
@@ -954,8 +973,8 @@ def prompt_handler(prompt):
         ViewFileCommandExecutor()
     ).set_next(
         ConditionalBreakpointExecutor()
-#    ).set_next(
-#        EnhancedStopCommandExecutor()
+    ).set_next(
+        BreakCommandExecutor()
     )
     prompt = executor.prompt_handler(prompt)
     return prompt
@@ -973,9 +992,9 @@ def completion_handler(line, prefix, completions):
     ).set_next(
         ClassNameCompletionExecutor()
     )
-    BreakPointManager().deactivate()
+    BreakPointManager().disable_all()
     request = executor.completion_handler(CompletionRequest(line, prefix, completions))
-    BreakPointManager().activate()
+    BreakPointManager().enable_all()
     return request.completions
 
 
@@ -986,8 +1005,8 @@ def input_handler(input):
     executor = ExpandAcronymExecutor()
     executor.set_next(
         DeleteCommandExecutor()
-#    ).set_next(
-#        EnhancedStopCommandExecutor()
+    ).set_next(
+        BreakCommandExecutor()
     ).set_next(
         RepeatLastCommandExecutor()
     ).set_next(
@@ -1002,9 +1021,9 @@ def output_handler(output):
     output handler
     """
     executor = DeleteCommandExecutor()
-#    executor.set_next(
-#        EnhancedStopCommandExecutor()
-#    )
+    executor.set_next(
+        BreakCommandExecutor()
+    )
     output = executor.output_handler(output)
     return output
 

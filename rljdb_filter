@@ -1,6 +1,6 @@
-#!/usr/bin/pudb3
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
+#!/usr/bin/pudb3
 # 文字化け防止コメント
 """
 DONE:
@@ -614,6 +614,52 @@ class BreakCommandExecutor(DeleteCommandExecutor, metaclass=Singleton):
             self.print_breakpoints()
 
 
+class DisableStopCommandExecutor(AbstractCustomCommandExecutor, metaclass=Singleton):
+    """
+    disable "stop at/in ..." command
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def is_the_command(self, input):
+        tokens = input.strip().split()
+        if tokens and tokens[0] == 'stop':
+            return True
+        else:
+            return False
+
+    def do_the_command(self, input):
+        """
+        Only show message
+        """
+        rlwrap_filter.send_output_oob('stop command is disabled.\n')
+        rlwrap_filter.send_output_oob('Use `break` instead.\n')
+
+
+class DisableClearCommandExecutor(AbstractCustomCommandExecutor, metaclass=Singleton):
+    """
+    disable "stop at/in ..." command
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def is_the_command(self, input):
+        tokens = input.strip().split()
+        if tokens and tokens[0] == 'clear':
+            return True
+        else:
+            return False
+
+    def do_the_command(self, input):
+        """
+        Only show message
+        """
+        rlwrap_filter.send_output_oob('clear command is disabled.\n')
+        rlwrap_filter.send_output_oob('Use `delete` instead.\n')
+
+
 class RepeatLastCommandExecutor(ExecutorBase, metaclass=Singleton):
     """
     Pressing enter key without typing a command do the last command to step
@@ -975,6 +1021,10 @@ def prompt_handler(prompt):
         ConditionalBreakpointExecutor()
     ).set_next(
         BreakCommandExecutor()
+    ).set_next(
+        DisableStopCommandExecutor()
+    ).set_next(
+        DisableClearCommandExecutor()
     )
     prompt = executor.prompt_handler(prompt)
     return prompt
@@ -1008,6 +1058,10 @@ def input_handler(input):
     ).set_next(
         BreakCommandExecutor()
     ).set_next(
+        DisableStopCommandExecutor()
+    ).set_next(
+        DisableClearCommandExecutor()
+    ).set_next(
         RepeatLastCommandExecutor()
     ).set_next(
         ViewFileCommandExecutor()
@@ -1023,6 +1077,10 @@ def output_handler(output):
     executor = DeleteCommandExecutor()
     executor.set_next(
         BreakCommandExecutor()
+    ).set_next(
+        DisableStopCommandExecutor()
+    ).set_next(
+        DisableClearCommandExecutor()
     )
     output = executor.output_handler(output)
     return output

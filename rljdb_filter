@@ -34,6 +34,7 @@ import datetime
 import time
 import subprocess
 import tempfile
+import io
 
 if 'RLWRAP_FILTERDIR' in os.environ:
     sys.path.append(os.environ['RLWRAP_FILTERDIR'])
@@ -936,10 +937,8 @@ def set_breakpoint():
                     continue
                 b = factory.create(line)
                 manager.add(b)
-    except io.TextIOBase as e:
-        rlwrap_filter.send_output_oob('Could not open ' + BREAKPOINT_FILE + ' (' + str(e) + ')')
     except Exception as e:
-        raise e
+        rlwrap_filter.send_output_oob('Could not open ' + BREAKPOINT_FILE + ' (' + str(e) + ')\n')
 
 
 def vacuum_until_match(substring):
@@ -968,9 +967,8 @@ def set_sourcepath():
                 if re.match(r'^\s*#.*', path):
                     continue
                 sourcepath += path + ':'
-    except:
-        debug('Could not open ' + SOURCEPATH_FILE)
-
+    except Exception as e:
+        rlwrap_filter.send_output_oob('Could not open ' + SOURCEPATH_FILE + ' (' + str(e) + ')\n')
     output = rlwrap_filter.cloak_and_dagger("use " + sourcepath, "> ", 1);
 
         

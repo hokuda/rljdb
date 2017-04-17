@@ -266,7 +266,7 @@ class ClassMemberCompletionExecutor(ExecutorBase):
         super().__init__()
 
     def handle_completion(self, request):
-        if not request.tokens[0] in ['print', 'dump', 'p', 'eval', 'set', 'stop', 'b', 'class', 'clear', 'watch', 'unwatch']:
+        if not request.tokens[0] in ['print', 'dump', 'p', 'eval', 'set', 'break', 'b', 'class', 'watch', 'unwatch']:
             return request
         debug("ClassMemberCompletionExecutor.handle_completion: request.completions=[" + ",".join(request.completions))
         last_token = request.tokens[-1]
@@ -428,7 +428,7 @@ class ClassNameCompletionExecutor(ExecutorBase):
     complete FQCN
     """
     def handle_completion(self, request):
-        if not request.tokens[0] in ['print', 'dump', 'p', 'stop', 'b', 'class', 'clear', 'watch', 'unwatch']:
+        if not request.tokens[0] in ['print', 'dump', 'p', 'break', 'b', 'class', 'watch', 'unwatch']:
             return request
         prefix = request.tokens[-1]
         output = rlwrap_filter.cloak_and_dagger("classes", PROMPT, 5, prompt_search_from=-256)

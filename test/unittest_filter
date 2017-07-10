@@ -198,7 +198,7 @@ class Test300ClassNameCompletionExecutor(unittest.TestCase):
     def test_handle_completion(self):
         executor = rljdb_filter.ClassNameCompletionExecutor()
 
-        request = rljdb_filter.CompletionRequest("stop in java.lang.StringBuf", "StringBuf", [])
+        request = rljdb_filter.CompletionRequest("break java.lang.StringBuffer", "StringBuffer", [])
         request = executor.handle_completion(request)
         actual = request.completions
         expected = ['StringBuffer', 'StringBuffer.']

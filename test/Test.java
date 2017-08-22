@@ -9,7 +9,7 @@ public class Test {
 
     public static void main (String[] args) {
         Test test = new Test();
-        String result = test.test("test0");
+        try{java.lang.Thread.sleep(5000);} catch(Exception e){} String result = test.test("test0");
         //System.out.println(result);
         result = test.test("test1");
         //System.out.println(result);

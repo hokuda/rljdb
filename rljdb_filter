@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
+# 文字化け防止コメント(comment in order to avoid garbling multibyte chars)
 #!/usr/bin/pudb3
-# 文字化け防止コメント
 """
 DONE:
 * set sourcepath
@@ -25,6 +25,8 @@ TODO:
 - conditional stop command in prompt
 - parse conditional breakpoint using pyparsing
 - disable/enable breakpoint
+- show where/locals/list outputs in other terminal
+- save breakpoint
 """
 
 import sys
@@ -35,6 +37,8 @@ import time
 import subprocess
 import tempfile
 import io
+import json
+import threading
 
 if 'RLWRAP_FILTERDIR' in os.environ:
     sys.path.append(os.environ['RLWRAP_FILTERDIR'])
@@ -42,14 +46,26 @@ else:
     sys.path.append('.')
 
 import rlwrapfilter
-        
+try:
+    import tornado.ioloop
+    import tornado.web
+    import tornado.websocket
+    from websocket import create_connection
+    HAS_TORNADO=True
+except:
+    HAS_TORNADO=False
+
+
+# constants
+PORT=55557
 BREAKPOINT_FILE='./rljdb.breakpoint'
 SOURCEPATH_FILE='./rljdb.sourcepath'
 DEBUGLOG_FILE = './rljdb.debug'
 DEBUGLOG = open(DEBUGLOG_FILE, mode='at') # append in text mode
 DEBUG = True
 #PROMPT = r"[>\]] " # default prompt pattern
-PROMPT = r"^(>)|(.+\[[0-9]+\])\s" # default prompt pattern
+#PROMPT = r"^((>)|(.+\[[0-9]+\])) $" # default prompt pattern
+PROMPT = r"((>)|(.+\[[0-9]+\])) $" # default prompt pattern
 COMMANDS = [
     # standard jdb commands
     'connectors',
@@ -111,7 +127,6 @@ COMMANDS = [
     'break', # set/show break point
     'delete', # delete break point
     ]
-
 LONGNAMES = {
     's':'step',
     'c':'cont',
@@ -122,11 +137,14 @@ LONGNAMES = {
     'l':'list',
     'v':'view',
     }
-
 ACRONYMS = {LONGNAMES[k] : k for k in LONGNAMES} # reverse map of LONGNAMES
+WEB_MODE = 'web'
+TERMINAL_MODE = 'terminal'
+MODE=None
 
+# globals
 rlwrap_filter = rlwrapfilter.RlwrapFilter()
-
+websocket_connection = None
 
 class Singleton(type):
     """
@@ -745,6 +763,40 @@ class ViewFileCommandExecutor(ExecutorBase, metaclass=Singleton):
                     yield os.path.join(root, file)
 
 
+class BreakpointInfoSenderExecutor(ExecutorBase, metaclass=Singleton):
+    """
+    send outputs of where, locals, list, and dump this
+    """
+    def __init__(self):
+        super().__init__()
+
+    def handle_prompt(self, prompt):
+        """
+        """
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": prompt = |" + prompt + "|")
+        if websocket_connection is None:
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": mode = " + MODE)
+            return prompt
+        p = r'(' + re.escape(prompt) + r')|(' + PROMPT + r')'
+        _nop = rlwrap_filter.cloak_and_dagger('#', re.escape(prompt), 10)
+        _where = rlwrap_filter.cloak_and_dagger('where', re.escape(prompt), 10)
+        _locals = rlwrap_filter.cloak_and_dagger('locals', PROMPT, 10)
+        _list = rlwrap_filter.cloak_and_dagger('list', PROMPT, 10)
+        _dump_this = rlwrap_filter.cloak_and_dagger('dump this', PROMPT, 10).replace('=', '<span style="color:red;">=</span>')
+        _json = json.dumps(
+            {
+                'where':_where,
+                'locals':_locals,
+                'list':_list,
+                'dump_this':_dump_this
+            }
+        )
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": json = " + _json)
+        websocket_connection.write_message(_json)
+
+        return prompt
+
+
 class ConditionalBreakpointExecutor(ExecutorBase):
     """
     Catches "Breakpoint hit: "thread=...", package.ClassName.method(), line=MM bci=NN",
@@ -923,6 +975,44 @@ class BreakPointManager(metaclass=Singleton):
         rlwrap_filter.send_output_oob('\n')
 
 
+class WebSocketInfoHandler(tornado.websocket.WebSocketHandler):
+    # where, locals, dump this, list
+    def check_origin(self, origin):
+        return True
+
+    def open(self):
+        """
+        if you want to send json to browser:
+        websocket_connection.write_message(json)
+        """
+        global websocket_connection
+        websocket_connection = self
+
+
+class WebSocketServerThread(threading.Thread):
+
+    """docstring for TestThread"""
+
+    def __init__(self):
+        super(WebSocketServerThread, self).__init__(daemon=True)
+
+    def run(self):
+        application = tornado.web.Application([
+            (r"/websocket", WebSocketInfoHandler),
+        ])
+        application.listen(PORT, address='127.0.0.1')
+        tornado.ioloop.IOLoop.current().start()
+
+    def waitForGettingStarted(self):
+        while True:
+            try:
+                ws = create_connection("ws://localhost:"+str(PORT)+"/websocket")
+                ws.close()
+                break
+            except ConnectionRefusedError as e:
+                pass
+
+
 def set_breakpoint():
     try:
         with open(BREAKPOINT_FILE, "rt") as file:
@@ -1023,6 +1113,8 @@ def prompt_handler(prompt):
         DisableStopCommandExecutor()
     ).set_next(
         DisableClearCommandExecutor()
+    ).set_next(
+        BreakpointInfoSenderExecutor()
     )
     prompt = executor.prompt_handler(prompt)
     return prompt
@@ -1114,6 +1206,17 @@ if __name__ == '__main__':
 
     debug('rljdb gets started\n')
 
+    try:
+        ws = create_connection("ws://localhost:55555/websocket")
+        thread = WebSocketServerThread()
+        thread.start()
+        thread.waitForGettingStarted()
+        ws.send('the filter started')
+        ws.close()
+        MODE=WEB_MODE
+    except ConnectionRefusedError as e:
+        MODE=TERMINAL_MODE
+        
     rlwrap_filter.cloak_and_dagger_verbose = False
     #rlwrap_filter.cloak_and_dagger_verbose = True
     rlwrap_filter.prompt_handler = prompt_handler

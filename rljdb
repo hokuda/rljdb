@@ -17,6 +17,7 @@ try:
     HAS_TORNADO=True
 except:
     HAS_TORNADO=False
+import asyncio
 
 HAS_GOTTY = find_executable('gotty') != None
 BINDIR = os.path.abspath(os.path.dirname(__file__))
@@ -125,12 +126,13 @@ class WebSocketServerThread(threading.Thread):
         super(WebSocketServerThread, self).__init__(daemon=True)
 
     def run(self):
+        asyncio.set_event_loop(asyncio.new_event_loop())
         application = tornado.web.Application([
             (r"/", WebSocketRootHandler),
             (r"/websocket", WebSocketInfoHandler),
         ])
         application.listen(PORT, address='127.0.0.1')
-        tornado.ioloop.IOLoop.current().start()
+        tornado.ioloop.IOLoop.instance().start()
 
 
 if __name__ == '__main__':

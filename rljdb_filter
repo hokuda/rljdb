@@ -54,6 +54,7 @@ try:
     HAS_TORNADO=True
 except:
     HAS_TORNADO=False
+import asyncio
 
 
 # constants
@@ -777,9 +778,7 @@ class BreakpointInfoSenderExecutor(ExecutorBase, metaclass=Singleton):
         if websocket_connection is None:
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": mode = " + MODE)
             return prompt
-        p = r'(' + re.escape(prompt) + r')|(' + PROMPT + r')'
-        _nop = rlwrap_filter.cloak_and_dagger('#', re.escape(prompt), 10)
-        _where = rlwrap_filter.cloak_and_dagger('where', re.escape(prompt), 10)
+        _where = rlwrap_filter.cloak_and_dagger('where', PROMPT, 10)
         _locals = rlwrap_filter.cloak_and_dagger('locals', PROMPT, 10)
         _list = rlwrap_filter.cloak_and_dagger('list', PROMPT, 10)
         _dump_this = rlwrap_filter.cloak_and_dagger('dump this', PROMPT, 10).replace('=', '<span style="color:red;">=</span>')
@@ -997,6 +996,7 @@ class WebSocketServerThread(threading.Thread):
         super(WebSocketServerThread, self).__init__(daemon=True)
 
     def run(self):
+        asyncio.set_event_loop(asyncio.new_event_loop())
         application = tornado.web.Application([
             (r"/websocket", WebSocketInfoHandler),
         ])

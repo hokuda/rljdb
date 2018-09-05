@@ -403,13 +403,15 @@ class ClassMemberCompletionExecutor(ExecutorBase):
         )
         return fields
 
+
     def complete_methods(self, class_name, tail, paren):
         debug("ClassMemberCompletionExecutor.complete_methods: tail=" + tail)
         output = rlwrap_filter.cloak_and_dagger("methods {0}".format(class_name), PROMPT, 1)
         debug("ClassMemberCompletionExecutor.complete_methods: output=" + output)
         methods = self.parse_methods(output)
         debug("ClassMemberCompletionExecutor.complete_methods: methods=[" + ",".join(methods))
-        pattern = r'^' + tail + paren.replace(' ', '').replace('(', '\(').replace(')', '\)')
+        pattern = r'^' + re.escape(tail + paren.replace(' ', ''))
+        debug("ClassMemberCompletionExecutor.complete_methods: pattern=" + pattern)
         return list(filter((lambda x: re.search(pattern , x)), methods))
     
 

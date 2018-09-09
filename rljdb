@@ -141,6 +141,7 @@ if __name__ == '__main__':
     thread.start()
 
     rlwrap = find_executable('rlwrap')
+    if rlwrap is None: exit("Not found rlwrap")
     rljdb_filter = BINDIR + '/rljdb_filter'
     rlwrap_opts = ['-H', HISTORY_FILE,
                    '-l', RLWRAP_LOG_FILE,

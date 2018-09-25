@@ -39,6 +39,9 @@ import tempfile
 import io
 import json
 import threading
+from pygments import highlight
+from pygments.lexers.jvm import JavaLexer
+from pygments.formatters import HtmlFormatter
 
 if 'RLWRAP_FILTERDIR' in os.environ:
     sys.path.append(os.environ['RLWRAP_FILTERDIR'])
@@ -773,27 +776,101 @@ class BreakpointInfoSenderExecutor(ExecutorBase, metaclass=Singleton):
     def __init__(self):
         super().__init__()
 
+    def get_highlight_code(self, srcfile, lineno):
+        src = ""
+        try:
+            with open(srcfile, "rt") as file:
+                src = ''.join(file.readlines())
+        except Exception as e:
+            pass
+
+        formatter = HtmlFormatter(full=True, linenos=True, cssclass="source", hl_lines=[lineno], anchorlinenos=False, lineanchors='lineno')
+        return highlight(src, JavaLexer(), formatter)
+
+    def parse_output(self, output):
+        """
+        extract class and line number in break point
+        find file
+        return filename in str and line number at break point in integer, total line number in integer
+        """
+        def dissolve(stop_in):
+            """
+            dissolves package.class$innerclass.method() and returns package, class.
+            [example]
+            dissolve("io.undertow.server.session.InMemorySessionManager$SessionImpl.getAttributeNames()")
+            returns "io.undertow.server.session", "InMemorySessionManager"
+            """
+            fqcn = stop_in.rsplit('.', 1)[0].split('$', 1)[0]
+            pkg, cls = tuple(fqcn.rsplit('.', 1))
+            return pkg, cls
+
+        def find_file(stop_in):
+            pkg, cls = dissolve(stop_in)
+            pkgdir = pkg.replace('.', '/')
+            manager = SourcePathManager()
+            srcpath = manager.source_path
+            for p in srcpath:
+                for root, dirs, files in os.walk(p):
+                    if not pkgdir in root:
+                        continue
+                    debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": root = " + root)
+                    for file in files:
+                        if file != cls + ".java":
+                            continue
+                        return os.path.join(root, file)
+            return None
+
+        def _do_parse_output(m):
+            stop_in = m.group(1)
+            lineno = m.group(2)
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name
+                  + ": stop_in = " + stop_in
+                  + ": lineno = " + lineno)
+            srcfile = None
+            f = find_file(stop_in)
+            if not f:
+                return None, None, None
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": f = " + f)
+            totalno = len(open(f).readlines())
+            return f, int(lineno), totalno
+
+        m = re.search(r"Step completed: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
+        if m:
+            return _do_parse_output(m)
+        m = re.search(r"Breakpoint hit: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
+        if m:
+            return _do_parse_output(m)
+        return None, None, None
+
+        
     def handle_prompt(self, prompt):
         """
+        Fetch cumulative_output
+        if output =~ /^Breakpoint hit:.*/ or /^Step completed:.*/, parse output
+        find source code file,
+        send outputs of where, locals, list, and dump this and highlight souce code via websocket
         """
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": prompt = |" + prompt + "|")
+        def get_highlight():
+            output = rlwrap_filter.cumulative_output
+            debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": output = " + output)
+            srcfile, lineno, totalno = self.parse_output(output)
+            code = self.get_highlight_code(srcfile, lineno) if srcfile else None
+            return {'code': code, 'lineno': lineno, 'totalno': totalno}
+
         if websocket_connection is None:
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": mode = " + MODE)
             return prompt
-        _where = rlwrap_filter.cloak_and_dagger('where', PROMPT, 10)
-        _locals = rlwrap_filter.cloak_and_dagger('locals', PROMPT, 10)
-        _list = rlwrap_filter.cloak_and_dagger('list', PROMPT, 10)
-        _dump_this = rlwrap_filter.cloak_and_dagger('dump this', PROMPT, 10).replace('=', '<span style="color:red;">=</span>')
-        _json = json.dumps(
+        info = json.dumps(
             {
-                'where':_where,
-                'locals':_locals,
-                'list':_list,
-                'dump_this':_dump_this
+                'where': rlwrap_filter.cloak_and_dagger('where', PROMPT, 10),
+                'locals': rlwrap_filter.cloak_and_dagger('locals', PROMPT, 10),
+                'list': rlwrap_filter.cloak_and_dagger('list', PROMPT, 10),
+                'dump_this': rlwrap_filter.cloak_and_dagger('dump this', PROMPT, 10).replace('=', '<span style="color:red;">=</span>').replace(': ', '<span style="color:red;font-weight:bold;">: </span>'),
+                'highlight': get_highlight()
             }
         )
-        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": json = " + _json)
-        websocket_connection.write_message(_json)
+        debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": info in json = " + info)
+        websocket_connection.write_message(info)
 
         return prompt
 

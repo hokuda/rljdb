@@ -102,7 +102,13 @@ class WebSocketRootHandler(tornado.web.RequestHandler):
         breakpoint_info_receiver.onmessage = function(ev) {
             var data = JSON.parse(ev.data);
             document.getElementById("where").firstElementChild.firstChild.nodeValue = data["where"];
-            document.getElementById("list").firstElementChild.firstChild.nodeValue = data["list"];
+            //document.getElementById("list").firstElementChild.firstChild.nodeValue = data["list"];
+            document.getElementById("list").innerHTML = data["highlight"]["code"];
+            var lineno = data["highlight"]["lineno"];
+            var totalno = data["highlight"]["totalno"];
+            var scrollHeight = document.getElementById("list").scrollHeight;
+            var frameHeight = document.getElementById("list").clientHeight;
+            document.getElementById("list").scrollTop = scrollHeight * lineno / totalno - frameHeight / 2;
             document.getElementById("locals").firstElementChild.firstChild.nodeValue = data["locals"];
     
             var dump_this = document.getElementById("dump_this");

@@ -23,11 +23,13 @@
 
 # Prerequisites
 
+rljdb uses:
+
 * [`rlwrap`](https://github.com/hanslub42/rlwrap) (>=0.43)
 * [`python3`](https://www.python.org/)
 * [`tornado`](http://www.tornadoweb.org/en/stable/) (optional)
 * [`GoTTY`](https://github.com/yudai/gotty) (optional)
-
+* [`pygments`](http://pygments.org/) (optional)
 
 
 # Installation
@@ -71,6 +73,13 @@ On Fedora/RHEL:
     $ wget https://github.com/yudai/gotty/releases/download/v1.0.1/gotty_linux_amd64.tar.gz
     $ tar zxvf gotty_linux_amd64.tar.gz
     $ cp ./gotty ${path_to_your_favorite_bin_directory}
+
+
+## install pygments
+
+
+    $ sudo dnf install python3-pygments.noarch
+
 
 ## install rljdb
 

@@ -21,15 +21,18 @@
 
 
 
-# Prerequisites
-
-rljdb uses:
+# Dependencies
 
 * [`rlwrap`](https://github.com/hanslub42/rlwrap) (>=0.43)
 * [`python3`](https://www.python.org/)
-* [`tornado`](http://www.tornadoweb.org/en/stable/) (optional)
-* [`GoTTY`](https://github.com/yudai/gotty) (optional)
-* [`pygments`](http://pygments.org/) (optional)
+
+
+# Optional Dependencies
+
+* [`tornado`](http://www.tornadoweb.org/en/stable/)
+* [`GoTTY`](https://github.com/yudai/gotty)
+* [`pygments`](http://pygments.org/)
+* [`websocket-client`](https://github.com/websocket-client/websocket-client)
 
 
 # Installation

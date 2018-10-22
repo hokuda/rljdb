@@ -84,6 +84,12 @@ On Fedora/RHEL:
     $ sudo dnf install python3-pygments.noarch
 
 
+## install pygments
+
+
+    $ sudo dnf install python3-websocket-client.noarch
+
+
 ## install rljdb
 
 

@@ -84,7 +84,7 @@ On Fedora/RHEL:
     $ sudo dnf install python3-pygments.noarch
 
 
-## install pygments
+## install websocket-client.noarch
 
 
     $ sudo dnf install python3-websocket-client.noarch

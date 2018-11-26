@@ -832,12 +832,12 @@ class BreakpointInfoSenderExecutor(ExecutorBase, metaclass=Singleton):
                 return None, None, None
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": f = " + f)
             totalno = len(open(f).readlines())
-            return f, int(lineno), totalno
+            return f, int(lineno.replace(',','')), totalno
 
-        m = re.search(r"Step completed: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
+        m = re.search(r"Step completed: \"thread=.*\", (.*), line=([0-9,]*) bci=.*", output)
         if m:
             return _do_parse_output(m)
-        m = re.search(r"Breakpoint hit: \"thread=.*\", (.*), line=([0-9]*) bci=.*", output)
+        m = re.search(r"Breakpoint hit: \"thread=.*\", (.*), line=([0-9,]*) bci=.*", output)
         if m:
             return _do_parse_output(m)
         return None, None, None

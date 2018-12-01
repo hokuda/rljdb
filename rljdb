@@ -163,7 +163,7 @@ if __name__ == '__main__':
     cmd = [rlwrap] + rlwrap_opts + [jdb] + jdb_opts
 
     if HAS_TORNADO and HAS_GOTTY:
-        cmdline = "gotty -a 127.0.0.1 -p " + str(PORT+1) + " -w bash -c \"sleep 1; " + ' '.join(cmd) + "\""
+        cmdline = "gotty -a 127.0.0.1 -p " + str(PORT+1) + " -w bash -c \"sleep 1; stty stop undef; " + ' '.join(cmd) + "\""
         print(cmdline)
         print('\nRunning in web mode. Access http://localhost:55555\n')
         os.system(cmdline)

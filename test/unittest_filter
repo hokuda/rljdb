@@ -20,7 +20,17 @@ sys.path.append('../')
 import rljdb_filter
         
 rlwrap_filter = rlwrapfilter.RlwrapFilter()
-PROMPT = r"[>\]] "
+PROMPT = r"((>)|(.+\[[0-9]+\])) $"
+
+
+def wait_until_stop():
+    where = ""
+    while(not where.startswith("  [")):
+        time.sleep(1)
+        rljdb_filter.rlwrap_filter.vacuum_stale_message(PROMPT, 10)
+        where = rljdb_filter.rlwrap_filter.cloak_and_dagger("where", PROMPT, 10)
+        print(sys._getframe().f_code.co_name + ": where(loop)=" + where)
+
 
 class Test100CompletionRequest(unittest.TestCase):
 
@@ -120,6 +130,9 @@ class Test300ClassMemberCompletionExecutor(unittest.TestCase):
     def test_get_class_name(self):
         executor = rljdb_filter.ClassMemberCompletionExecutor()
 
+        rljdb_filter.rlwrap_filter.cloak_and_dagger("run", PROMPT, 10)
+        wait_until_stop()
+        
         where_output = rljdb_filter.rlwrap_filter.cloak_and_dagger("where", "> ", 1)
         rljdb_filter.rlwrap_filter.send_output_oob("where_output=")
         rljdb_filter.rlwrap_filter.send_output_oob(where_output)
@@ -130,6 +143,9 @@ class Test300ClassMemberCompletionExecutor(unittest.TestCase):
         expected = "Test"
         self.assertEqual(expected, actual)
 
+        rljdb_filter.rlwrap_filter.cloak_and_dagger("next", PROMPT, 10)
+        wait_until_stop()
+        
         name = "result"
         actual = executor.get_class_name(name)
         expected = "java.lang.String"
@@ -262,13 +278,6 @@ class Test300ConditionalBreakpointExecutor(unittest.TestCase):
 class Test400BreakpointInfoSenderExecutor(unittest.TestCase):
 
     def test_is_frame_changed(self):
-        def wait_until_stop():
-            where = ""
-            while(not where.startswith("  [")):
-                time.sleep(1)
-                rljdb_filter.rlwrap_filter.vacuum_stale_message(prompt, 10)
-                where = rljdb_filter.rlwrap_filter.cloak_and_dagger("where", prompt, 10)
-                print(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": where(loop)=" + where)
 
         prompt = r"((>)|(.+\[[0-9]+\])) $"
         #prompt = "(> )|(main[1] )"

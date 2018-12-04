@@ -258,6 +258,36 @@ class Test300ConditionalBreakpointExecutor(unittest.TestCase):
         expected = 'Test:14'
         self.assertEqual(expected, actual)
 
+
+class Test400BreakpointInfoSenderExecutor(unittest.TestCase):
+
+    def test_is_frame_changed(self):
+        def wait_until_stop():
+            where = ""
+            while(not where.startswith("  [")):
+                time.sleep(1)
+                rljdb_filter.rlwrap_filter.vacuum_stale_message(prompt, 10)
+                where = rljdb_filter.rlwrap_filter.cloak_and_dagger("where", prompt, 10)
+                print(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": where(loop)=" + where)
+
+        prompt = r"((>)|(.+\[[0-9]+\])) $"
+        #prompt = "(> )|(main[1] )"
+        executor = rljdb_filter.BreakpointInfoSenderExecutor()
+        #rljdb_filter.rlwrap_filter.cloak_and_dagger("stop in Test.test(java.lang.String)", PROMPT, 10)
+        rljdb_filter.rlwrap_filter.cloak_and_dagger("run", prompt, 10)
+        wait_until_stop()
+        rljdb_filter.rlwrap_filter.cloak_and_dagger("next", prompt, 10)
+        wait_until_stop()
+        where = rljdb_filter.rlwrap_filter.cloak_and_dagger("where", prompt, 10)
+        print(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": where(1st)=" + where)
+        self.assertTrue(executor.is_frame_changed(where))
+
+        rljdb_filter.rlwrap_filter.vacuum_stale_message(prompt, 1)
+        where = rljdb_filter.rlwrap_filter.cloak_and_dagger("where", prompt, 10)
+        print(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": where(2nd)=" + where)
+        self.assertFalse(executor.is_frame_changed(where))
+        
+
 class Test999Exit(unittest.TestCase):
 
     def test_exit(self):

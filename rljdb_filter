@@ -777,6 +777,7 @@ class BreakpointInfoSenderExecutor(ExecutorBase, metaclass=Singleton):
     def __init__(self):
         super().__init__()
         self.lexer = JavaLexer()
+        self.frame = ""
 
     def get_highlight(self, where):
         def parse_where(where):
@@ -848,20 +849,35 @@ class BreakpointInfoSenderExecutor(ExecutorBase, metaclass=Singleton):
             file_path, totalno = find_file(fqcn)
             code = get_highlight_code(file_path, lineno) if file_path else None
             return {'code': code, 'lineno': lineno, 'totalno': totalno}
-    
+
+    def is_frame_changed(self, where):
+        """
+        True if the last frame changed since last invocation
+        """
+        frame = where.split('\n')[0]
+        if frame == self.frame:
+            return False
+        else:
+            self.frame = frame
+            return True
+
     def handle_prompt(self, prompt):
         """
         send outputs of where, locals, and dump this and highlight souce code via websocket
         """
+        rlwrap_filter.vacuum_stale_message(PROMPT, 0)
+        where = rlwrap_filter.cloak_and_dagger('where', PROMPT, 10)
         out = rlwrap_filter.cumulative_output
         debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": cumulative output = " + out)
-        if not ((prompt == "> ") or ("\nStep completed: " in out) or ("\nBreakpoint hit: " in out)):
+        if not ((prompt == "> ") # no thread stopped
+                or ("\nStep completed: " in out) # step
+                or ("\nBreakpoint hit: " in out) # breakpoint hit
+                or (out == "" and self.is_frame_changed(where)) # move to upper/lower frame
+        ):
             return prompt # do not send update
         if websocket_connection is None:
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": mode = " + MODE)
             return prompt
-        rlwrap_filter.vacuum_stale_message(PROMPT, 0)
-        where = rlwrap_filter.cloak_and_dagger('where', PROMPT, 10)
         info = json.dumps(
             {
                 'where': where,

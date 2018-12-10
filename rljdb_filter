@@ -878,12 +878,41 @@ class BreakpointInfoSenderExecutor(ExecutorBase, metaclass=Singleton):
         if websocket_connection is None:
             debug(self.__class__.__name__ + "." + sys._getframe().f_code.co_name + ": mode = " + MODE)
             return prompt
+
+        the_anchor = """
+<a href="#" onclick='document.getElementById("gotty-frame").dispatchEvent(new KeyboardEvent("keypress",{key: "a",})); alert("出た!");
+return false;
+//var keyboardEvent = document.getElementById("gotty").getElementById("gotty-frame").createEvent("KeyboardEvent");
+//keyboardEvent.initKeyboardEvent(
+//                   "keydown",
+//                    true,
+//                    true,
+//                    window,
+//                    false,
+//                    false,
+//                    false,
+//                    false,
+//                    40,
+//                    0
+//);
+//document.getElementById("gotty").getElementById("gotty-frame").dispatchEvent(keyboardEvent);
+//
+//var initMethod = typeof keyboardEvent.initKeyboardEvent !== undefined ? "initKeyboardEvent" : "initKeyEvent";
+//
+//
+//
+//var _e = document.createEvent("KeyboardEvent");
+//_e.initKeyEvent("keydown", true, true, null, false, false, false, false, 65, 0);
+//document.getElementById("gotty").firstElementChild.firstChild.dispatchEvent(_e);
+//document.getElementById("gotty").dispatchEvent(null);
+'>click</a>
+"""
         info = json.dumps(
             {
                 'where': where,
-                'locals': rlwrap_filter.cloak_and_dagger('locals', PROMPT, 10),
+                'locals': "<br/>" + rlwrap_filter.cloak_and_dagger('locals', PROMPT, 10),
                 'list': 'obsolete',
-                'dump_this': rlwrap_filter.cloak_and_dagger('dump this', PROMPT, 10).replace('=', '<span style="color:red;">=</span>').replace(': ', '<span style="color:red;font-weight:bold;">: </span>'),
+                'dump_this': the_anchor + rlwrap_filter.cloak_and_dagger('dump this', PROMPT, 10).replace('=', '<span style="color:red;">=</span>').replace(': ', '<span style="color:red;font-weight:bold;">: </span>'),
                 'highlight': self.get_highlight(where)
             }
         )

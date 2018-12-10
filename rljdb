@@ -89,7 +89,7 @@ class WebSocketRootHandler(tornado.web.RequestHandler):
         <pre>.</pre>
       </div>
       <div id="gotty" class="box5" style="border: solid 0px; box-sizing: border-box; width: 100%; height: 40%; float: left;">
-        <iframe width=100% height=100% src="http://localhost:""" + str(PORT + 1) + """/" sandbox="allow-forms allow-scripts allow-top-navigation allow-same-origin">
+        <iframe id="gotty-frame" width=100% height=100% src="http://localhost:""" + str(PORT + 1) + """/" sandbox="allow-forms allow-scripts allow-top-navigation allow-same-origin">
         </iframe>
       </div>
     </div>

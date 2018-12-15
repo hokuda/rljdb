@@ -131,6 +131,7 @@ COMMANDS = [
     'view', # view source code
     'break', # set/show break point
     'delete', # delete break point
+    'save-breakpoint', # save breakpoints to rljdb.breakpoint file
     ]
 LONGNAMES = {
     's':'step',
@@ -604,7 +605,49 @@ class DeleteCommandExecutor(AbstractCustomCommandExecutor, metaclass=Singleton):
             "Usage: delete\n" +
             "       delete <number>\n"
         )
-        
+
+
+class SaveBreakpointCommandExecutor(AbstractCustomCommandExecutor, metaclass=Singleton):
+    """
+    `save-breakpoint` saves breakpoints to rljdb.breakpoint
+    """
+    def __init__(self):
+        super().__init__()
+        self.index_out_of_bound = False
+
+    def is_the_command(self, input):
+        tokens = input.strip().split()
+        if tokens and tokens[0] == 'save-breakpoint':
+            return True
+        else:
+            return False
+
+    def do_the_command(self, input):
+        """
+        backup the file
+        write breakpoints to the file
+        """
+        try:
+            timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+            src = BREAKPOINT_FILE
+            dst = '.'.join([BREAKPOINT_FILE, timestamp])
+            os.rename(src, dst)
+        except OSError:
+            rlwrap_filter.send_output_oob('Could not rename ' + src + ' to ' + dst + '\n')
+            rlwrap_filter.send_output_oob(traceback.format_exc())
+            return
+        try:
+            f = open(BREAKPOINT_FILE, 'w')
+            manager = BreakPointManager()
+            breakpoints = manager.get_all()
+            if not breakpoints:
+                rlwrap_filter.send_output_oob('No breakpoint\n')
+                return
+            for b in breakpoints:
+                f.write(b.to_string())
+        except OSError:
+            rlwrap_filter.send_output_oob(traceback.format_exc())
+
     
 class BreakCommandExecutor(DeleteCommandExecutor, metaclass=Singleton):
     """
@@ -1211,6 +1254,8 @@ def prompt_handler(prompt):
         DisableClearCommandExecutor()
     ).set_next(
         BreakpointInfoSenderExecutor()
+    ).set_next(
+        SaveBreakpointCommandExecutor()
     )
     prompt = executor.prompt_handler(prompt)
     return prompt
@@ -1251,6 +1296,8 @@ def input_handler(input):
         RepeatLastCommandExecutor()
     ).set_next(
         ViewFileCommandExecutor()
+    ).set_next(
+        SaveBreakpointCommandExecutor()
     )
     input = executor.input_handler(input)
     return input

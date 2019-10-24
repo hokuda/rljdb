@@ -676,7 +676,7 @@ class BreakCommandExecutor(DeleteCommandExecutor, metaclass=Singleton):
             manager = BreakPointManager()
             factory = BreakPointFactory()
             breakpoint = factory.create(tokens[1])
-            manager.add(breakpoint)
+            manager.add(breakpoint, update_rljdb_breakpoint=True)
             manager.print_result()
         except IndexError:
             rlwrap_filter.send_output_oob('index out of range\n')
@@ -1075,7 +1075,7 @@ class BreakPointManager(metaclass=Singleton):
         self.break_points = []
         self.result = None
 
-    def add(self, break_point):
+    def add(self, break_point, update_rljdb_breakpoint=False):
         for existing in self.break_points:
             if not break_point.location == existing.location:
                 continue
@@ -1088,6 +1088,12 @@ class BreakPointManager(metaclass=Singleton):
                 
         self.break_points.append(break_point)
         break_point.enable()
+        if update_rljdb_breakpoint:
+            try:
+                with open(BREAKPOINT_FILE, 'a') as f:
+                    f.write(break_point.to_string() + '\n')
+            except OSError:
+                rlwrap_filter.send_output_oob(traceback.format_exc())
         return self.break_points.index(break_point)
 
     def remove(self, i):

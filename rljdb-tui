@@ -1,0 +1,345 @@
+#!/usr/bin/python3
+from __future__ import unicode_literals
+from prompt_toolkit.application import Application
+from prompt_toolkit.document import Document
+from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
+from prompt_toolkit.key_binding.defaults import load_key_bindings
+from prompt_toolkit.layout import Layout, VSplit, HSplit, Window
+from prompt_toolkit.layout import Dimension
+from prompt_toolkit.layout.dimension import D
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.styles import Style
+from prompt_toolkit.widgets import TextArea
+from prompt_toolkit.widgets import SearchToolbar
+from prompt_toolkit.lexers import PygmentsLexer
+
+from prompt_toolkit.clipboard.pyperclip import PyperclipClipboard
+
+from ptterm import Terminal
+
+from pygments.lexers.python import PythonLexer
+
+def main():
+    style = Style([
+        ('terminal focused',    'bg:#aaaaaa'),
+        ('title', 'bg:#000044 #ffffff underline'),
+    ])
+
+    #divide_equally = Dimension(min=10, max=10, weight=1)
+    divide_equally = Dimension(min=10, max=30, weight=1)
+    #divide_equally = Dimension(weight=1)
+    #divide_equally = D()
+
+    search_field = SearchToolbar(text_if_not_searching=[
+        ('class:not-searching', "Press '/' to start searching.")])
+
+    term1 = Terminal(command=['/usr/bin/python3', './rljdb-cli'])
+
+    text_area = TextArea(text=
+        'Press Control-W to switch focus.\n'
+        'Then you can edit this text area.\n'
+        'Press Control-X to exit\n'
+    )
+
+    text_locals_area = TextArea(
+        text =
+        'local\n\nPress Control-W to switch focus.\n'
+        'Then you can edit this text area.\n'
+        'Press Control-X to exit\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        ,
+        read_only=True,
+        height       = divide_equally,
+        scrollbar    = True,
+        line_numbers = True,
+        search_field = search_field,
+        lexer        = PygmentsLexer(PythonLexer),
+        #dont_extend_height = True,
+    )
+    
+    text_this_area = TextArea(
+        text=
+        'Press Control-W to switch focus.\n'
+        'Then you can edit this text area.\n'
+        'Press Control-X to exit\n'
+        ,
+        read_only=True,
+        height       = divide_equally,
+        scrollbar    = True,
+        line_numbers = True,
+        #dont_extend_height = True,
+    )
+
+    text_list_area = TextArea(
+        text=
+        'Press Control-W to switch focus.\n'
+        'Then you can edit this text area.\n'
+        'Press Control-X to exit'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        ,
+        read_only=True,
+        #height = divide_equally,
+        scrollbar    = True,
+        #line_numbers = True,
+        search_field = search_field,
+        lexer        = PygmentsLexer(PythonLexer),
+        #dont_extend_height = True,
+    )
+
+    text_where_area = TextArea(
+        text=
+        'Press Control-W to switch focus.\n'
+        'Then you can edit this text area.\n'
+        'Press Control-X to exit'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        'hoge: fuga\n'
+        ,
+        read_only=True,
+        #height       = divide_equally,
+        scrollbar    = True,
+        #line_numbers = True,
+        search_field = search_field,
+        lexer        = PygmentsLexer(PythonLexer),
+        #dont_extend_height = True,
+    )
+
+    focus_list = [
+        text_list_area,
+        text_where_area,
+        text_locals_area,
+        text_this_area,
+        term1, # has focus at startup
+    ]
+
+    kb = KeyBindings()
+
+    @kb.add('c-v')
+    def _(event):
+        term1.enter_copy_mode()
+
+    @kb.add('c-w')
+    def _(event):
+        switch_focus()
+
+    @kb.add('c-x', eager=True)
+    def _(event):
+        term1.terminal_control.process.write_input('\x04') # send EOT to terminate rljdb-cli
+        event.app.exit()
+
+    @kb.add('c-q', eager=True)
+    def _(event):
+        term1.terminal_control.process.write_input('hoge\n')
+        text_locals_area.text = """
+1aaa
+2aaa
+3aaa
+4aaa
+5aaa
+6aaa
+7aaa
+8
+9
+0
+1aaa
+2aaa
+3aaa
+4aaa
+5aaa
+6aaa
+7aaa
+8
+9
+0
+1aaa
+2aaa
+3aaa
+4aaa
+5aaa
+6aaa
+7aaa
+8
+9
+0
+1aaa
+2aaa
+3aaa
+4aaa
+5aaa
+6aaa
+7aaa
+8
+9
+0
+"""
+
+        #text_locals_area.buffer.set_document(Document("XXXXXXXX", 0), bypass_readonly=True)
+
+
+    @kb.add('c-e', eager=True)
+    def _(event):
+        text_locals_area.text = """
+hoge
+
+"""
+
+
+    def switch_focus():
+        " Change focus when Control-W is pressed."
+        focus = focus_list.pop(0)
+        application.layout.focus(focus)
+        focus_list.append(focus)
+
+    application = Application(
+        layout=Layout(
+            container=HSplit([
+                Window(
+                    height=1,
+                    style='class:title',
+                    content=FormattedTextControl(' Press Control-W to switch focus.')),
+                VSplit([
+                    HSplit([
+                        text_list_area,
+                        text_where_area,
+                    ],
+                           padding=1,
+                           padding_char='-',
+                           #height = divide_equally,
+                    ),
+                    #Window(style='bg:#aaaaff', width=1),
+                    HSplit([
+                        text_locals_area,
+                        text_this_area,
+                        HSplit(
+                            [term1,],
+                            #height = Dimension(min=10),
+                            height = Dimension(min=20, max=20, weight=1)
+                        ),
+                    ],
+                           padding=1,
+                           padding_char='-',
+                    )
+                ],
+                       #padding=1,
+                       #padding_char='|',
+                ),
+            ]),
+            focused_element=term1
+        ),
+        style=style,
+        key_bindings=merge_key_bindings([
+            load_key_bindings(),
+            kb,
+        ]),
+        full_screen=True,
+        mouse_support=True,
+        clipboard=PyperclipClipboard(),
+    )
+    application.run()
+
+
+if __name__ == '__main__':
+    main()

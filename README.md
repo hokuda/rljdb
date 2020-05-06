@@ -1,3 +1,4 @@
+moved to [`pjdb`](https://github.com/hokuda/pjdb)
 # rljdb
 
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)][license]
